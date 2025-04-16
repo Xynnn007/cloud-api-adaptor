@@ -47,6 +47,9 @@ ifndef QEMU_BINARY
 endif
 
 endif
+else ifeq ($(PODVM_DISTRO),alinux)
+	@echo defined
+	$(eval OPTS := -var disk_size=22323)
 else ifeq ($(PODVM_DISTRO),rhel)
 	@echo defined
 	$(eval OPTS := -var disk_size=11144)
