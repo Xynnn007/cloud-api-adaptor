@@ -56,7 +56,8 @@ elif [[ "${image}" == *"podvm-generic-ubuntu-s390x"* ]]; then
 fi
 
 # Create a non-running container to extract image
-$container_binary create --pull=${pull} ${platform_flag} --name "$container_name" "$image" /bin/sh >/dev/null 2>&1;
+# $container_binary create --pull=always --platform="$platform" --name "$container_name" "$image" /bin/sh >/dev/null 2>&1;
+$container_binary create --platform="$platform" --name "$container_name" "$image" /bin/sh >/dev/null 2>&1;
 # Destory container after use
 rm-container(){
     $container_binary rm -f "$container_name" >/dev/null 2>&1;

@@ -40,9 +40,9 @@ RESOURCE_CTRL ?= true
 YQ_CHECKSUM_$(TARGET_ARCH) ?= $(YQ_CHECKSUM)
 # BUILTIN_CLOUD_PROVIDERS is used for binary build -- what providers are built in the binaries.
 ifeq ($(RELEASE_BUILD),true)
-	BUILTIN_CLOUD_PROVIDERS ?= aws azure gcp ibmcloud vsphere
+	BUILTIN_CLOUD_PROVIDERS ?= aws azure gcp ibmcloud vsphere alibabacloud
 else
-	BUILTIN_CLOUD_PROVIDERS ?= aws azure gcp ibmcloud vsphere libvirt docker
+	BUILTIN_CLOUD_PROVIDERS ?= aws azure gcp ibmcloud vsphere alibabacloud libvirt docker
 endif
 
 all: build
@@ -219,11 +219,11 @@ podvm-binaries:
 
 podvm-image:
 ifeq ($(PODVM_DISTRO),rhel)
-ifeq ($(shell test -f $(IMAGE_URL) && echo 1 || echo 0),1)
-	cp ${IMAGE_URL} ./rhel.img
-	$(eval IMAGE_URL=cloud-api-adaptor/rhel.img)
-	@echo "### Copied IMAGE_URL file to $(IMAGE_URL) in order to suite the docker context"
-endif
+	ifeq ($(shell test -f $(IMAGE_URL) && echo 1 || echo 0),1)
+		cp ${IMAGE_URL} ./rhel.img
+		$(eval IMAGE_URL=cloud-api-adaptor/rhel.img)
+		@echo "### Copied IMAGE_URL file to $(IMAGE_URL) in order to suite the docker context"
+	endif
 endif
 	cp -rf ../../.git .git
 	cd ../ && docker buildx build -t $(PODVM_IMAGE) -f cloud-api-adaptor/podvm/$(PODVM_DOCKERFILE) \
