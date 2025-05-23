@@ -129,19 +129,26 @@ By default, your Red Hat OpenShift cluster will not work with the peer pod compo
 
 ## Upload a PeerPod VM Custom Image
 
-A peer pod VM image needs to be created as a VPC custom image in IBM Cloud in order to create the peer pod instances
-from. You can do this by following the [image instructions in README.md](./README.md#peer-pod-vm-image), or run the following command to use a prebuilt demo image.
+A peer pod VM image needs to be available as a VPC custom image in IBM Cloud to create the peer pod instances with. If you want to run the full confidential containers end-to-end demo, including TDX attestation with a [Trustee](https://github.com/confidential-containers/trustee), you will need to make sure that your peer pod VM image is configured with the TDX attestation agent and kernel modules.
 
-> [!WARNING]
-> If you have a previously-downloaded image but have since refreshed the cloud-api-adaptor repo, you should re-import the image to make sure you are using an image that is compatible with the latest code.
-
-Run the following command from the root directory of the `cloud-api-adaptor` repository:
-
+If you don't have a suitable peer pod image, you will need to [build one](./README.md#peer-pod-vm-image). For example, you can use the following command to build a TDX enabled RHEL image:
 ```bash
-src/cloud-api-adaptor/ibmcloud/image/import.sh ghcr.io/confidential-containers/podvm-generic-ubuntu-amd64:latest "$REGION" --platform linux/amd64
+# Run this command in directory src/cloud-api-adaptor
+PODVM_DISTRO=rhel TEE_PLATFORM=tdx ACTIVATION_KEY=<key> ORG_ID=<org id> IMAGE_URL=<path to base kvm qcow2 image> make podvm-builder podvm-binaries podvm-image
 ```
 
-This script will end with the line: `Image <image-name> with id <image-id> is available`. Make note of the `image-id`, which will be
+This will create the RHEL image wrapped in a docker container image. You can then upload the RHEL image to IBM Cloud by running the following command from the root directory of the `cloud-api-adaptor` repository:
+```bash
+src/cloud-api-adaptor/ibmcloud/image/import.sh <built docker image>:<image tag> "$REGION" --pull never --os red-9-amd64
+```
+
+> [!TIP]
+> If you don't have a TDX enabled image and are unable to build one, you can still run the peer pod demo without attestation. Run the following command to import a prebuilt non-TDX demo image:
+> ```bash
+> src/cloud-api-adaptor/ibmcloud/image/import.sh ghcr.io/confidential-containers/podvm-generic-ubuntu-amd64:latest "$REGION" --platform linux/amd64
+> ```
+
+The import script will end with the line: `Image <image-name> with id <image-id> is available`. Make note of the `image-id`, which will be
 needed below.
 
 > [!NOTE]
@@ -204,7 +211,10 @@ sed -i ".bak" -e 's/DISABLECVM="true"/DISABLECVM="false"/' -e 's/bx2-2x8/bx3dc-2
 ```
 
 > [!WARNING]
-> Confidential (CVM) mode is still a work in progress and should only be enabled for development purposes at this time.
+> If you want to experiment with attestation, you need to set `INITDATA="<your initdata>"` to reference a [Trustee](https://github.com/confidential-containers/trustee) service that is configured to verify TDX evidence. You also need to make sure that your configured peer pod VM image includes the TDX attestation agent and kernel modules.
+
+> [!TIP]
+> You can configure and run a simple Trustee in another VSI in your VPC by following the instructions in [Deploy a test Trustee](#deploy-a-test-trustee) before proceeding.
 
 Finally, run the `caa-provisioner-cli` command to install the operator and cloud-api-adaptor:
 
@@ -277,7 +287,7 @@ from the curl pod:
 
 ```bash
 export CURL_POD=$(oc get pod -n default -l app=curl -o jsonpath={.items..metadata.name})
-export HELLO_IP=$(oc get pod -n default -l app=helloworld -o jsonpath={.items..status.podIP})
+export HELLO_IP=$(oc get pod -n default helloworld -o jsonpath={.status.podIP})
 oc exec -n default -it $CURL_POD -c curl -- curl http://$HELLO_IP:5000/hello
 ```
 
@@ -286,6 +296,19 @@ If everything is working, you will see the following output:
 ```
 Hello version: v1, instance: helloworld
 ```
+
+> [!NOTE]
+> If you have a Trustee configured, you can also test that attestation is working by running curl inside the helloworld pod to retrieve a key from the confidential data hub (CDH).
+>
+> For example, if your Trustee is configured with the same example key as used in the [test Trustee](#deploy-a-test-trustee), you can retrieve the value of key1 using the following command:
+> ```bash
+> oc exec -n default -it helloworld -- bash
+> curl http://127.0.0.1:8006/cdh/resource/default/kbsres1/key1
+> ```
+> If it is working, this will output the key's configured value:
+> ```
+> res1val1
+> ```
 
 ## Uninstall and clean up
 
@@ -311,4 +334,104 @@ Otherwise:
     export TEST_PROVISION_FILE="$HOME/peerpods-cluster.properties"
     ./caa-provisioner-cli -action=uninstall
     popd
+    ```
+
+## Deploy a test Trustee
+
+The following instructions can be used to set up a simple Trustee with an HTTP endpoint for testing attestation.
+
+1. Create a Ubuntu VSI in the same VPC as your ROKS cluster.
+    ```
+    ibmcloud is instance-create "$CLUSTER_NAME-trustee" "$VPC_ID" "$ZONE" "bx2-2x8" "$SUBNET_ID" --image "r014-85b1a9ec-369b-41d6-b921-39666d4139d1" --keys "$SSH_KEY_ID" --allow-ip-spoofing false
+    ```
+
+1. SSH into the new VSI and run the following commands.
+    > Tip: you can SSH to the private IP of the VSI from a pod or node in your ROKS cluster, since they are running in the same VPC.
+
+    First, run the following commands to install docker and oras:
+    ```
+    sudo apt-get update
+    sudo apt-get install ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update
+    sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+    sudo snap install oras --classic
+    ```
+
+    Next, deploy the Trustee services:
+    ```
+    git clone https://github.com/confidential-containers/trustee.git
+    cd trustee
+    openssl genpkey -algorithm ed25519 > kbs/config/private.key
+    openssl pkey -in kbs/config/private.key -pubout -out kbs/config/public.pub
+    sudo docker compose up -d
+    ```
+
+    Finally, configure an example key that can be used for CDH testing:
+    ```
+    oras pull ghcr.io/confidential-containers/staged-images/kbs-client:latest
+    chmod +x kbs-client
+    cat > kbsres1_key1 << EOF
+    res1val1
+    EOF
+    ./kbs-client --url http://127.0.0.1:8080 config --auth-private-key kbs/config/private.key set-resource --resource-file kbsres1_key1 --path default/kbsres1/key1
+    ```
+
+1. Configure your confidential containers environment to use the Trustee.
+
+    First, use the VSI IP to set the `KBS_SERVICE_ENDPOINT` environment variable to the URL of the Trustee:
+    ```
+    export KBS_SERVICE_ENDPOINT="http://$(ibmcloud is instance "$CLUSTER_NAME-trustee" --output JSON | jq -r '.network_interfaces[].primary_ip.address'):8080"
+    ```
+
+    Then, set the `INITDATA` environment variable to the compressed and encoded Trustee configuration:
+    ```
+    export INITDATA=$(cat <<EOF | gzip | base64 -w0
+    algorithm = "sha256"
+    version = "0.1.0"
+
+    [data]
+    "aa.toml" = '''
+    [token_configs]
+    [token_configs.coco_as]
+    url = "$KBS_SERVICE_ENDPOINT"
+
+    [token_configs.kbs]
+    url = "$KBS_SERVICE_ENDPOINT"
+    '''
+
+    "cdh.toml"  = '''
+    socket = 'unix:///run/confidential-containers/cdh.sock'
+    credentials = []
+
+    [kbc]
+    name = "cc_kbc"
+    url = "$KBS_SERVICE_ENDPOINT"
+    '''
+    EOF
+    )
+    ```
+
+    If you want to use this Trustee for all peer pods in the cluster, run the following command to configure the global `INITDATA` property in your `peerpods-cluster.properties` file:
+    ```
+    echo "INITDATA=\"$INITDATA\"" >> ~/peerpods-cluster.properties
+    ```
+
+    Alternatively, you can configure the Trustee for a specific peer pod, by including the `io.katacontainers.config.runtime.cc_init_data` annotation on the pod. For example:
+    ```
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: mypod
+      annotations:
+        io.katacontainers.config.runtime.cc_init_data: $INITDATA
+    spec:
+      runtimeClassName: kata-remote
+      ...
     ```

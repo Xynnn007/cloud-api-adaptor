@@ -31,8 +31,7 @@ installGolang() {
         echo "Installing latest yq"
         sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${TARGET_ARCH} -O /usr/bin/yq && sudo chmod a+x /usr/bin/yq
     fi
-    # use yq-shim to work with v3
-    REQUIRED_GO_VERSION="$(./hack/yq-shim.sh '.tools.golang' versions.yaml)"
+    REQUIRED_GO_VERSION="$(yq '.tools.golang' versions.yaml)"
     if [[ -d /usr/local/go ]]; then
         installed_go_version=$(v=$(go version | awk '{print $3}') && echo ${v#go})
         if [[ "$(printf '%s\n' "$REQUIRED_GO_VERSION" "$installed_go_version" | sort -V | head -1)" != "$REQUIRED_GO_VERSION" ]]; then
@@ -79,7 +78,7 @@ installLibvirt() {
 installKcli() {
     if ! command -v kcli >/dev/null; then
         echo "Installing kcli"
-        kcli_version="$(./hack/yq-shim.sh '.tools.kcli' versions.yaml)"
+        kcli_version="$(yq '.tools.kcli' versions.yaml)"
         if [ $OS_DISTRO == "ubuntu" ]; then
             # Work around newer Ubuntu's python venv errors by using pipx to install kcli
             sudo DEBIAN_FRONTEND=noninteractive apt-get install pipx -y

@@ -33,6 +33,7 @@ optionals+=""
 [[ "${SECURE_COMMS_PP_OUTBOUNDS}" ]] && optionals+="-secure-comms-pp-outbounds ${SECURE_COMMS_PP_OUTBOUNDS} "
 [[ "${SECURE_COMMS_KBS_ADDR}" ]] && optionals+="-secure-comms-kbs ${SECURE_COMMS_KBS_ADDR} "
 [[ "${PEERPODS_LIMIT_PER_NODE}" ]] && optionals+="-peerpods-limit-per-node ${PEERPODS_LIMIT_PER_NODE} "
+[[ "${DISABLECVM}" == "true" ]] && optionals+="-disable-cvm "
 
 test_vars() {
     for i in "$@"; do
@@ -62,7 +63,6 @@ aws() {
     [[ "${TAGS}" ]] && optionals+="-tags ${TAGS} "                                     # Custom tags applied to pod vm
     [[ "${USE_PUBLIC_IP}" == "true" ]] && optionals+="-use-public-ip "                 # Use public IP for pod vm
     [[ "${ROOT_VOLUME_SIZE}" ]] && optionals+="-root-volume-size ${ROOT_VOLUME_SIZE} " # Specify root volume size for pod vm
-    [[ "${DISABLECVM}" == "true" ]] && optionals+="-disable-cvm "
     [[ "${EXTERNAL_NETWORK_VIA_PODVM}" ]] && optionals+="-ext-network-via-podvm  "
     [[ "${POD_SUBNET_CIDRS}" ]] && optionals+="-pod-subnet-cidrs ${POD_SUBNET_CIDRS} "
 
@@ -78,7 +78,6 @@ azure() {
     test_vars AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP AZURE_SUBNET_ID AZURE_IMAGE_ID
 
     [[ "${SSH_USERNAME}" ]] && optionals+="-ssh-username ${SSH_USERNAME} "
-    [[ "${DISABLECVM}" == "true" ]] && optionals+="-disable-cvm "
     [[ "${AZURE_INSTANCE_SIZES}" ]] && optionals+="-instance-sizes ${AZURE_INSTANCE_SIZES} "
     [[ "${TAGS}" ]] && optionals+="-tags ${TAGS} " # Custom tags applied to pod vm
     [[ "${ENABLE_SECURE_BOOT}" == "true" ]] && optionals+="-enable-secure-boot "
@@ -98,6 +97,28 @@ azure() {
         ${optionals}
 }
 
+alibabacloud() {
+    one_of ALIBABACLOUD_ACCESS_KEY_ID ALIBABA_CLOUD_ROLE_ARN
+
+    [[ "${REGION}" ]] && optionals+="-region ${REGION} "
+    [[ "${IMAGEID}" ]] && optionals+="-imageid ${IMAGEID} "
+    [[ "${INSTANCE_TYPE}" ]] && optionals+=" -instance-type ${INSTANCE_TYPE} "
+    [[ "${VSWITCH_ID}" ]] && optionals+=" -vswitch-id ${VSWITCH_ID} "
+    [[ "${SECURITY_GROUP_IDS}" ]] && optionals+=" -security-group-ids ${SECURITY_GROUP_IDS} "
+    [[ "${KEYNAME}" ]] && optionals+=" -keyname ${KEYNAME} "
+    [[ "${TAGS}" ]] && optionals+=" -tags ${TAGS} "
+    [[ "${USE_PUBLIC_IP}" == "true" ]] && optionals+=" -use-public-ip "
+    [[ "${SYSTEM_DISK_SIZE}" ]] && optionals+=" -system-disk-size ${SYSTEM_DISK_SIZE} "
+    [[ "${DISABLECVM}" == "true" ]] && optionals+=" -disable-cvm "
+    [[ "${EXTERNAL_NETWORK_VIA_PODVM}" ]] && optionals+=" -ext-network-via-podvm"
+
+    set -x
+    exec cloud-api-adaptor alibabacloud \
+        -pods-dir "${PEER_PODS_DIR}" \
+        -socket "${REMOTE_HYPERVISOR_ENDPOINT}" \
+        ${optionals}
+}
+
 gcp() {
     test_vars GCP_CREDENTIALS GCP_PROJECT_ID GCP_ZONE PODVM_IMAGE_NAME
 
@@ -109,7 +130,6 @@ gcp() {
     [[ "${GCP_DISK_TYPE}" ]] && optionals+="-disk-type ${GCP_DISK_TYPE} "                          # defaults to 'pd-standard'
     [[ "${GCP_CONFIDENTIAL_TYPE}" ]] && optionals+="-confidential-type ${GCP_CONFIDENTIAL_TYPE} "  # if not set raise exception only when disablecvm = false
     [[ "${ROOT_VOLUME_SIZE}" ]] && optionals+="-root-volume-size ${ROOT_VOLUME_SIZE} "             # Specify root volume size for pod vm
-    [[ "${DISABLECVM}" == "true" ]] && optionals+="-disable-cvm "                                  # defaults to false
 
     set -x
 
@@ -125,8 +145,6 @@ gcp() {
 
 ibmcloud() {
     one_of IBMCLOUD_API_KEY IBMCLOUD_IAM_PROFILE_ID
-
-    [[ "${DISABLECVM}" = "true" ]] && optionals+="-disable-cvm "
 
     set -x
     exec cloud-api-adaptor ibmcloud \
@@ -172,7 +190,6 @@ ibmcloud_powervs() {
 libvirt() {
     test_vars LIBVIRT_URI
 
-    [[ "${DISABLECVM}" = "true" ]] && optionals+="-disable-cvm "
     set -x
     exec cloud-api-adaptor libvirt \
         -pods-dir "${PEER_PODS_DIR}" \
@@ -224,9 +241,9 @@ docker() {
 help_msg() {
     cat <<EOF
 Usage:
-	CLOUD_PROVIDER=aws|azure|gcp|ibmcloud|ibmcloud-powervs|libvirt|vsphere|docker $0
+	CLOUD_PROVIDER=alibabacloud|aws|azure|gcp|ibmcloud|ibmcloud-powervs|libvirt|vsphere|docker $0
 or
-	$0 aws|azure|gcp|ibmcloud|ibmcloud-powervs|libvirt|vsphere|docker
+	$0 alibabacloud|aws|azure|gcp|ibmcloud|ibmcloud-powervs|libvirt|vsphere|docker
 
 in addition all cloud provider specific env variables must be set and valid
 (CLOUD_PROVIDER is currently set to "$CLOUD_PROVIDER")
@@ -237,6 +254,8 @@ if [[ "$CLOUD_PROVIDER" == "aws" ]]; then
     aws
 elif [[ "$CLOUD_PROVIDER" == "azure" ]]; then
     azure
+elif [[ "$CLOUD_PROVIDER" == "alibabacloud" ]]; then
+    alibabacloud
 elif [[ "$CLOUD_PROVIDER" == "gcp" ]]; then
     gcp
 elif [[ "$CLOUD_PROVIDER" == "ibmcloud" ]]; then

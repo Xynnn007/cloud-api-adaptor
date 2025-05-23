@@ -2,10 +2,6 @@ package userdata
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/sha512"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -14,7 +10,6 @@ import (
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
-	toml "github.com/pelletier/go-toml/v2"
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/confidential-containers/cloud-api-adaptor/src/cloud-api-adaptor/pkg/initdata"
@@ -34,6 +29,9 @@ const (
 	// Ref: https://cloud.google.com/compute/docs/storing-retrieving-metadata
 	GcpImdsUrl         = "http://metadata.google.internal/computeMetadata/v1/instance"
 	GcpUserDataImdsUrl = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/user-data"
+	// Ref: https://www.alibabacloud.com/help/en/ecs/user-guide/customize-the-initialization-configuration-for-an-instance
+	AlibabaCloudImdsUrl         = "http://100.100.100.200/latest/dynamic/instance-identity/document"
+	AlibabaCloudUserDataImdsUrl = "http://100.100.100.200/latest/user-data"
 )
 
 var logger = log.New(log.Writer(), "[userdata/provision] ", log.LstdFlags|log.Lmsgprefix)
@@ -118,6 +116,14 @@ func (a FileUserDataProvider) GetUserData(ctx context.Context) ([]byte, error) {
 	return userData, nil
 }
 
+type AlibabaCloudDataProvider struct{ DefaultRetry }
+
+func (a AlibabaCloudDataProvider) GetUserData(ctx context.Context) ([]byte, error) {
+	url := AlibabaCloudUserDataImdsUrl
+	logger.Printf("provider: AlibabaCloud, userDataUrl: %s\n", url)
+	return imdsGet(ctx, url, false, nil)
+}
+
 func newProvider(ctx context.Context) (UserDataProvider, error) {
 	// This checks for the presence of a file and doesn't rely on http req like the
 	// azure, aws ones, thereby making it faster and hence checking this first
@@ -135,6 +141,10 @@ func newProvider(ctx context.Context) (UserDataProvider, error) {
 
 	if isGCPVM(ctx) {
 		return GCPUserDataProvider{}, nil
+	}
+
+	if isAlibabaCloudVM(ctx) {
+		return AlibabaCloudDataProvider{}, nil
 	}
 
 	return nil, fmt.Errorf("unsupported user data provider")
@@ -234,22 +244,17 @@ func extractInitdataAndHash(cfg *Config) error {
 		return fmt.Errorf("Error stat initdata file: %w", err)
 	}
 
-	dataBytes, err := os.ReadFile(path)
+	fileReader, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("Error read initdata file: %w", err)
 	}
 
-	decodedBytes, err := base64.StdEncoding.DecodeString(string(dataBytes))
+	id, err := initdata.Parse(fileReader)
 	if err != nil {
-		return fmt.Errorf("Error base64 decode initdata: %w", err)
-	}
-	initdata := initdata.InitData{}
-	err = toml.Unmarshal(decodedBytes, &initdata)
-	if err != nil {
-		return fmt.Errorf("Error unmarshalling initdata: %w", err)
+		return fmt.Errorf("Error parse initdata: %w", err)
 	}
 
-	for key, value := range initdata.Data {
+	for key, value := range id.Body.Data {
 		path := filepath.Join(cfg.parentPath, key)
 		if isAllowed(path, cfg.initdataFiles) {
 			if err := writeFile(path, []byte(value)); err != nil {
@@ -260,22 +265,8 @@ func extractInitdataAndHash(cfg *Config) error {
 		}
 	}
 
-	checksumStr := ""
-	switch initdata.Algorithm {
-	case "sha256":
-		hash := sha256.Sum256(decodedBytes)
-		checksumStr = hex.EncodeToString(hash[:])
-	case "sha384":
-		hash := sha512.Sum384(decodedBytes)
-		checksumStr = hex.EncodeToString(hash[:])
-	case "sha512":
-		hash := sha512.Sum512(decodedBytes)
-		checksumStr = hex.EncodeToString(hash[:])
-	default:
-		return fmt.Errorf("Error creating initdata hash, the Algorithm %s not supported", initdata.Algorithm)
-	}
-
-	err = writeFile(cfg.digestPath, []byte(checksumStr)) // the hash in digestPath will also be used by attester
+	// the hash in digestPath will also be used by attester
+	err = writeFile(cfg.digestPath, []byte(id.Digest))
 	if err != nil {
 		return fmt.Errorf("failed to write file %s: %w", cfg.digestPath, err)
 	}

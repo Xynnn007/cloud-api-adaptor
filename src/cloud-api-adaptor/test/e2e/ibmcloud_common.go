@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	vpcv1 "github.com/IBM/vpc-beta-go-sdk/vpcbetav1"
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/IBM/vpc-go-sdk/vpcv1"
 	pv "github.com/confidential-containers/cloud-api-adaptor/src/cloud-api-adaptor/test/provisioner/ibmcloud"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 func CreateConfidentialPodCheckIBMSECommands() []TestCommand {
@@ -86,9 +86,9 @@ func NewPodWithPVCFromIBMVPCBlockDriver(namespace, podName, containerName, image
 					Image:           csiImageName,
 					ImagePullPolicy: corev1.PullAlways,
 					SecurityContext: &corev1.SecurityContext{
-						Privileged:   pointer.Bool(true),
-						RunAsNonRoot: pointer.Bool(false),
-						RunAsUser:    pointer.Int64(0),
+						Privileged:   ptr.To(true),
+						RunAsNonRoot: ptr.To(false),
+						RunAsUser:    func(i int64) *int64 { return &i }(0),
 					},
 					Ports: []corev1.ContainerPort{
 						{
@@ -285,7 +285,7 @@ func NewPodWithPVCFromIBMVPCBlockDriver(namespace, podName, containerName, image
 
 // IBMCloudAssert implements the CloudAssert interface for ibmcloud.
 type IBMCloudAssert struct {
-	VPC *vpcv1.VpcbetaV1
+	VPC *vpcv1.VpcV1
 }
 
 func (c IBMCloudAssert) DefaultTimeout() time.Duration {
@@ -343,7 +343,7 @@ func GetIBMInstanceProfileType(prefix string, config string) string {
 }
 
 type IBMRollingUpdateAssert struct {
-	VPC *vpcv1.VpcbetaV1
+	VPC *vpcv1.VpcV1
 	// cache Pod VM instance IDs for rolling update test
 	InstanceIDs [2]string
 }
