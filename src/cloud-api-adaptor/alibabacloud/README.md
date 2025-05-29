@@ -234,6 +234,47 @@ later.
     ROLE_ARN=$(aliyun ram GetRole --region ${REGION_ID} --RoleName ${ROLE_NAME} | jq -r ".Role.Arn")
     ```
 
+3. Add Internet access to the VPC
+
+    ```sh
+    export VPC_ID=$(aliyun cs DescribeClusterDetail --ClusterId ${CLUSTER_ID} | jq -r ".vpc_id")
+    export VSWITCH_ID=$(echo ${VSWITCH_IDS} | sed 's/[][]//g' | sed 's/"//g')
+    aliyun vpc CreateNatGateway \
+      --region ${REGION_ID} \
+      --RegionId ${REGION_ID} \
+      --VpcId ${VPC_ID} \
+      --NatType Enhanced \
+      --VSwitchId ${VSWITCH_ID} \
+      --NetworkType internet
+    
+    export GATEWAY_ID="<NatGatewayId>"
+    export SNAT_TABLE_ID="<SnatTableId>"
+
+    # The band width of the public ip (Mbps)
+    export BAND_WIDTH=5
+    aliyun vpc AllocateEipAddress \
+      --region ${REGION_ID} \
+      --RegionId ${REGION_ID} \
+      --Bandwidth ${BAND_WIDTH}
+
+    export EIP_ID="<AllocationId>"
+    export EIP_ADDRESS="<EipAddress>"
+  
+    aliyun vpc AssociateEipAddress \
+      --region ${REGION_ID} \
+      --RegionId ${REGION_ID} \
+      --AllocationId ${EIP_ID} \
+      --InstanceId ${GATEWAY_ID} \
+      --InstanceType Nat
+    
+    aliyun vpc CreateSnatEntry \
+      --region ${REGION_ID} \
+      --RegionId ${REGION_ID} \
+      --SnatTableId ${SNAT_TABLE_ID} \
+      --SourceVSwitchId ${VSWITCH_ID} \
+      --SnatIp ${EIP_ADDRESS}
+    ```
+
 ## Deploy CAA
 
 ### Create the credentials file
