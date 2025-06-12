@@ -34,6 +34,12 @@ on:
         required: true
       REGISTRY_CREDENTIAL_ENCODED:
         required: true
+      ALIBABA_ACCESS_KEY_SECRET:
+        required: true
+      ALIBABA_KUBECONFIG:
+        required: true
+      ALIBABA_ACCESS_KEY:
+        required: true
 
 env:
   # cloud-api-adaptor image registry
@@ -212,6 +218,32 @@ jobs:
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  
+  # Run Alibaba Cloud e2e tests
+  alibabacloud:
+    name: Alibaba Cloud
+    if: |
+      github.event_name == 'workflow_dispatch'
+    needs: [podvm, image, prep_install]
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu
+        provider:
+          - generic
+        arch:
+          - amd64
+    uses: ./.github/workflows/e2e_alibabacloud.yaml
+    with:
+      caa_image: ${{ inputs.registry }}/cloud-api-adaptor:${{ inputs.caa_image_tag }}
+      podvm_image: ${{ inputs.registry }}/podvm-${{ matrix.provider }}-${{ matrix.os }}-${{ matrix.arch }}:${{ inputs.podvm_image_tag }}
+      git_ref: ${{ inputs.git_ref }}
+      oras: false
+    secrets:
+      ALIBABA_ACCESS_KEY_SECRET: ${{ secrets.ALIBABA_ACCESS_KEY_SECRET }}
+      ALIBABA_ACCESS_KEY: ${{ secrets.ALIBABA_ACCESS_KEY }}
+      ALIBABA_KUBECONFIG: ${{ secrets.ALIBABA_KUBECONFIG }}
 
   # Run libvirt e2e tests if pull request labeled 'test_e2e_libvirt'
   libvirt:

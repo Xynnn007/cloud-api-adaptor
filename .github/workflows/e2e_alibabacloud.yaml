@@ -1,0 +1,165 @@
+# (C) Copyright Confidential Containers Contributors 2025.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Run alibabacloud cloud e2e tests.
+name: (Callable) alibabacloud cloud e2e tests
+
+on:
+  workflow_call:
+    inputs:
+      podvm_image:
+        required: true
+        type: string
+      caa_image:
+        required: true
+        type: string
+      git_ref:
+        default: 'main'
+        description: Git ref to checkout the cloud-api-adaptor repository. Defaults to main.
+        required: false
+        type: string
+      oras:
+        description: Whether the podvm_image is oras published
+        default: false
+        required: false
+        type: boolean
+      # TODO: we now only support onprem (existing cluster)
+      cluster_type:
+        description: Specify the cluster type. Accepted values are "onprem".
+        default: onprem
+        required: false
+        type: string
+      container_runtime:
+        default: 'containerd'
+        description: Name of the container runtime. Either containerd or crio.
+        required: false
+        type: string
+    secrets:
+      ALIBABA_ACCESS_KEY_SECRET:
+        required: true
+      ALIBABA_KUBECONFIG:
+        required: true
+      ALIBABA_ACCESS_KEY:
+        required: true
+env:
+  CLOUD_PROVIDER: alibabacloud
+  DEBIAN_FRONTEND: noninteractive
+  CLI_VERSION: 3.0.282
+
+jobs:
+  # Check the org/repository has Alibaba Cloud secrets (ALIBABA_ACCESS_KEY, ALIBABA_ACCESS_KEY_SECRET and ALIBABA_KUBECONFIG). On absence of
+  # secrets it should skip the execution of the test job.
+  alibabacloud-credentials:
+    runs-on: ubuntu-22.04
+    outputs:
+      has_secrets: ${{ steps.check_secrets.outputs.has_secrets }}
+    steps:
+      - name: Check secrets
+        id: check_secrets
+        run: |
+         if [[ -n "${{ secrets.ALIBABA_ACCESS_KEY }}" && -n "${{ secrets.ALIBABA_ACCESS_KEY_SECRET }}" && -n "${{ secrets.ALIBABA_KUBECONFIG }}" ]]; then
+           echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+         else
+           echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+         fi
+
+  test-alibabacloud:
+    needs: alibabacloud-credentials
+    if: needs.alibabacloud-credentials.outputs.has_secrets == 'true'
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: src/cloud-api-adaptor
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - name: Rebase the code
+        if: github.event_name == 'pull_request_target'
+        working-directory: ./
+        run: |
+          ./hack/ci-helper.sh rebase-atop-of-the-latest-target-branch
+
+      - name: Read properties from versions.yaml
+        run: |
+          sudo snap install yq
+          go_version="$(yq '.tools.golang' versions.yaml)"
+          [ -n "$go_version" ]
+          echo "GO_VERSION=${go_version}" >> "$GITHUB_ENV"
+          echo "ORAS_VERSION=$(yq -e '.tools.oras' versions.yaml)" >> "$GITHUB_ENV"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: oras-project/setup-oras@8d34698a59f5ffe24821f0b48ab62a3de8b64b20 # v1
+        with:
+          version: ${{ env.ORAS_VERSION }}
+
+      - name: Extract qcow2 from ${{ inputs.podvm_image }}
+        if: ${{ !inputs.oras }}
+        run: |
+           qcow2=$(echo "${{ inputs.podvm_image }}" | sed -e "s#.*/\(.*\):.*#\1.qcow2#")
+           ./hack/download-image.sh "${{ inputs.podvm_image }}" . -o "${qcow2}"
+           echo "PODVM_QCOW2=$(pwd)/${qcow2}" >> "$GITHUB_ENV"
+           # Clean up docker images to make space
+           docker system prune -a -f
+        working-directory: src/cloud-api-adaptor/podvm
+
+      - name: Use oras to get qcow2 from ${{ inputs.podvm_image }}
+        if: ${{ inputs.oras }}
+        run: |
+          oras pull ${{ inputs.podvm_image }}
+          tar xvJpf podvm.tar.xz
+          qcow2=$(find ./*.qcow2)
+          echo "PODVM_QCOW2=$(pwd)/${qcow2}" >> "$GITHUB_ENV"
+        working-directory: src/cloud-api-adaptor/podvm
+
+      - name: Install kustomize
+        run: |
+          command -v kustomize >/dev/null || \
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | \
+            sudo bash -s /usr/local/bin
+
+      - name: Update kustomization configuration
+        run: |
+          cd "install/overlays/alibabacloud"
+          kustomize edit set image "cloud-api-adaptor=${{ inputs.caa_image }}"
+          # Print for debugging
+          echo "::group::alibabacloud kustomization"
+          cat kustomization.yaml
+          echo "::endgroup::"
+
+      - name: Download Alibaba Cloud CLI
+        run: |
+          wget "https://github.com/aliyun/aliyun-cli/releases/download/v${CLI_VERSION}/aliyun-cli-linux-${CLI_VERSION}-amd64.tgz"
+          tar xvf "aliyun-cli-linux-${CLI_VERSION}-amd64.tgz"
+          sudo install -m 0755 aliyun /usr/local/bin/aliyun
+
+      - name: Config Alibaba Cloud CLI
+        run: |
+          aliyun configure set --mode AK --access-key-id ${{ secrets.ALIBABA_ACCESS_KEY }} --access-key-secret ${{ secrets.ALIBABA_ACCESS_KEY_SECRET }} --region cn-beijing
+
+      - name: Config ACK cluster
+        if: inputs.cluster_type == 'onprem'
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo ${{ secrets.ALIBABA_KUBECONFIG }} > "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: run tests
+        id: runTests
+        run: |
+          export CLOUD_PROVIDER=${CLOUD_PROVIDER}
+          export DEPLOY_KBS=false
+          export TEST_PROVISION="yes"
+          export TEST_TEARDOWN="yes"
+          export TEST_PROVISION_FILE="$PWD/alibabacloud.properties"
+          export TEST_PODVM_IMAGE="${{ env.PODVM_QCOW2 }}"
+          export TEST_E2E_TIMEOUT="90m"
+
+          make test-e2e
