@@ -24,6 +24,7 @@ on:
       registry:
         description: the container registry where built images will be pushed to
         required: true
+        default: 'ghcr.io/xynnn007'
         type: string
     secrets:
       AWS_ACCESS_KEY_ID:
@@ -57,7 +58,7 @@ jobs:
   podvm_builder:
     uses: ./.github/workflows/podvm_builder.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       image_tag: ${{ inputs.podvm_image_tag }}
       git_ref: ${{ inputs.git_ref }}
     secrets:
@@ -67,7 +68,7 @@ jobs:
     needs: [podvm_builder]
     uses: ./.github/workflows/podvm_binaries.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       image_tag: ${{ inputs.podvm_image_tag }}
       git_ref: ${{ inputs.git_ref }}
     secrets:
@@ -77,7 +78,7 @@ jobs:
     needs: [podvm_binaries]
     uses: ./.github/workflows/podvm.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       image_tag: ${{ inputs.podvm_image_tag }}
       git_ref: ${{ inputs.git_ref }}
     secrets:
@@ -86,7 +87,7 @@ jobs:
   podvm_mkosi_amd64:
     uses: ./.github/workflows/podvm_mkosi.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       image_tag: ${{ inputs.podvm_image_tag }}
       git_ref: ${{ inputs.git_ref }}
       arch: amd64
@@ -97,7 +98,7 @@ jobs:
   podvm_mkosi_s390x:
     uses: ./.github/workflows/podvm_mkosi.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       image_tag: ${{ inputs.podvm_image_tag }}
       git_ref: ${{ inputs.git_ref }}
       arch: s390x
@@ -121,7 +122,7 @@ jobs:
   image:
     uses: ./.github/workflows/caa_build_and_push.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       dev_tags: ${{ inputs.caa_image_tag }}-dev
       release_tags: ${{ inputs.caa_image_tag }}
       git_ref: ${{ inputs.git_ref }}
@@ -270,7 +271,7 @@ jobs:
   caa_image_amd64:
     uses: ./.github/workflows/caa_build_and_push.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       dev_arches: 'linux/amd64'
       release_arches: 'linux/amd64'
       dev_tags: ${{ inputs.caa_image_tag }}-amd64-dev
@@ -282,7 +283,7 @@ jobs:
   caa_image_s390x:
     uses: ./.github/workflows/caa_build_and_push.yaml
     with:
-      registry: ${{ inputs.registry }}
+      registry: ghcr.io/xynnn007
       dev_arches: 'linux/s390x'
       release_arches: 'linux/s390x'
       dev_tags: ${{ inputs.caa_image_tag }}-s390x-dev
