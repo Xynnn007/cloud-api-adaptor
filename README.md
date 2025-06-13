@@ -13,7 +13,7 @@ of [Kata Containers](https://github.com/kata-containers/kata-containers)
 It enables the creation of Kata Containers VMs on any machines without the need for bare metal worker nodes,
 or nested virtualisation support.
 
-## Architecture
+## Architecture  
 
 The background and description of the components involved in 'peer pods' can be found in the [architecture documentation](./docs/architecture.md).
 
