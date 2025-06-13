@@ -63,13 +63,13 @@ jobs:
       uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
       with:
         registry: ghcr.io
-        username: ${{ github.repository_owner }}
+        username: xynnn007
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build and push
       run: make podvm-builder
       env:
           PUSH: true
-          REGISTRY: ${{ inputs.registry }}
+          REGISTRY: ghcr.io/xynnn007
           PODVM_TAG: ${{ inputs.image_tag }}
           PODVM_DISTRO: ${{ matrix.os }}
