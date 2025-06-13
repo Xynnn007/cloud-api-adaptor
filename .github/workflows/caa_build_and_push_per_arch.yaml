@@ -110,7 +110,7 @@ jobs:
         if: ${{ startsWith(inputs.registry, 'quay.io') }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
-          registry: ${{ inputs.registry }}
+          registry: ghcr.io/xynnn007
           username: ${{ vars.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
@@ -118,8 +118,8 @@ jobs:
         if: ${{ startsWith(inputs.registry, 'ghcr.io') }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
-          registry: ${{ inputs.registry }}
-          username: ${{ github.repository_owner }}
+          registry: ghcr.io/xynnn007
+          username: xynnn007
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push dev image
@@ -187,7 +187,7 @@ jobs:
         if: ${{ startsWith(inputs.registry, 'quay.io') }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
-          registry: ${{ inputs.registry }}
+          registry: ghcr.io/xynnn007
           username: ${{ vars.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
@@ -195,12 +195,12 @@ jobs:
         if: ${{ startsWith(inputs.registry, 'ghcr.io') }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
-          registry: ${{ inputs.registry }}
-          username: ${{ github.repository_owner }}
+          registry: ghcr.io/xynnn007
+          username: xynnn007
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate image manifest
         env:
-          registry: ${{ inputs.registry }}
+          registry: ghcr.io/xynnn007
         run:  |
           hack/image-manifest.sh
