@@ -24,6 +24,7 @@ on:
       registry:
         description: the container registry where built images will be pushed to
         required: true
+        default: 'ghcr.io/xynnn007'
         type: string
     secrets:
       AWS_ACCESS_KEY_ID:
