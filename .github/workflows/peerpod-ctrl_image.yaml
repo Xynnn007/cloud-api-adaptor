@@ -55,7 +55,7 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: xynnn007
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Validate build args contains the essentials
         run: |

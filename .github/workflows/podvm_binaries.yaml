@@ -29,10 +29,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu]
+        os: [alinux, ubuntu]
         arch: [amd64, s390x]
         include:
           - os: ubuntu
+        exclude:
+          - os: alinux
+            arch: s390x  
     steps:
     - name: Checkout Code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -62,7 +65,7 @@ jobs:
       uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
       with:
         registry: ghcr.io
-        username: ${{ github.repository_owner }}
+        username: xynnn007
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build and push
