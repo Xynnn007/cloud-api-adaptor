@@ -151,6 +151,7 @@ jobs:
         run: |
           mkdir -p "$HOME/.kube"
           echo "${ALIBABA_KUBECONFIG}" > "$HOME/.kube/config"
+          ls -al "$HOME/.kube/config"
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
           # Print for debugging
           echo "::group::alibabacloud pods"
