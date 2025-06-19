@@ -122,14 +122,26 @@ func (a *OnPremCluster) UploadPodvm(imagePath string, ctx context.Context, cfg *
 		return fmt.Errorf("failed to get image file stat: %v", err)
 	}
 	key := stat.Name()
-	cloudUrl := fmt.Sprintf("oss://%s/%s", a.OssBucket, key)
+	// Execute the command `git rev-parse HEAD` to get git rev
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get current git rev: %v", err)
+	}
+
+	// Convert the output to string and trim any whitespace/newline characters
+	commitHash := strings.TrimSpace(string(output))
+
+	imageName := fmt.Sprintf("%s-%s", key, commitHash)
+
+	cloudUrl := fmt.Sprintf("oss://%s/%s", a.OssBucket, imageName)
 	err = a.uploadOss(imagePath, cloudUrl)
 	if err != nil {
 		return err
 	}
 
 	// Import image as Pod VM image
-	err = a.importImage(key)
+	err = a.importImage(imageName)
 	if err != nil {
 		return err
 	}
