@@ -255,10 +255,11 @@ func (p *CloudAPIAdaptor) Deploy(ctx context.Context, cfg *envconf.Config, props
 		return err
 	}
 
+	log.Info("apply for peerpods deployment")
 	cmd = exec.Command("kubectl", "apply", "-k", p.ccOpGitRepo+"/config/samples/ccruntime/peer-pods?ref="+p.ccOpGitRef)
 	cmd.Env = append(os.Environ(), "KUBECONFIG="+cfg.KubeconfigFile())
 	stdoutStderr, err = cmd.CombinedOutput()
-	log.Tracef("%v, output: %s", cmd, stdoutStderr)
+	log.Infof("%v, output: %s", cmd, stdoutStderr)
 	if err != nil {
 		return err
 	}
