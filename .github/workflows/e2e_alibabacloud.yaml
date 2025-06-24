@@ -157,6 +157,22 @@ jobs:
           echo "::group::alibabacloud pods"
           kubectl get pods -A
           echo "::endgroup::"
+      
+      - name: Config Alibaba Cloud
+        run: |
+          cat <<EOF>>alibabacloud.properties
+          caa_image="${{ inputs.caa_image }}"
+          cluster_type="${{ inputs.cluster_type }}"
+          region="cn-beijing"
+          rrsa_role_arn="acs:ram::1148942494945369:role/caa-ci"
+          rrsa_provider_arn="acs:ram::1148942494945369:oidc-provider/ack-rrsa-c762114f139454698805672c3b0264a17"
+          oss_bucket="peerpod-test"
+          oss_endpoint="https://oss-cn-beijing.aliyuncs.com"
+          EOF
+          # For debugging
+          echo "::group::alibabacloud.properties"
+          cat alibabacloud.properties
+          echo "::endgroup::"
 
       - name: run tests
         id: runTests
@@ -165,7 +181,7 @@ jobs:
           export DEPLOY_KBS=false
           export TEST_PROVISION="false"
           export TEST_TEARDOWN="yes"
-          export TEST_PROVISION_FILE="$PWD/test/provisioner/alibabacloud/alibabacloud.properties"
+          export TEST_PROVISION_FILE="$PWD/alibabacloud.properties"
           export TEST_PODVM_IMAGE="${{ env.PODVM_QCOW2 }}"
           export TEST_E2E_TIMEOUT="90m"
 
