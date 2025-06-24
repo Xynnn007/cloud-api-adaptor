@@ -262,11 +262,22 @@ func (a *AlibabaCloudInstallOverlay) Edit(ctx context.Context, cfg *envconf.Conf
 	}
 
 	for k, v := range mapProps {
-		if properties[k] != "" {
-			if err = a.Overlay.SetKustomizeConfigMapGeneratorLiteral("peer-pods-cm",
-				v, properties[k]); err != nil {
-				return err
+		switch k {
+		case "IMAGEID", "REGION":
+			if err = a.Overlay.SetKustomizeConfigMapGeneratorLiteral("peer-pods-cm", v, properties[k]); err != nil {
+				return fmt.Errorf("failed to set Kustomize: %v", err)
 			}
+		}
+
+	}
+
+	if properties["rrsa_provider_arn"] != "" && properties["rrsa_role_arn"] != "" {
+		if err = createRRSACredentialFile(AlibabaCloudCredentialsFile, AlibabaCloudProps.RrsaRoleArn, AlibabaCloudProps.RrsaProviderArn); err != nil {
+			return fmt.Errorf("failed to create RRSA credential file: %v", err)
+		}
+
+		if err = a.Overlay.SetKustomizeSecretGeneratorEnv("peer-pods-secret", AlibabaCloudCredentialsFile); err != nil {
+			return fmt.Errorf("failed to set Kustomize secret: %v", err)
 		}
 	}
 
