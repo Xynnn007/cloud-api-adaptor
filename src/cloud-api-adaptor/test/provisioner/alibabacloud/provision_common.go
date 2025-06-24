@@ -41,6 +41,7 @@ type OnPremCluster struct {
 	OssBucket       string
 	OssEndpoint     string
 	CaaImage        string
+	ClusterType     string
 }
 
 // NewAlibabaCloudProvisioner instantiates the AlibabaCloud provisioner
@@ -61,6 +62,7 @@ func NewAlibabaCloudProvisioner(properties map[string]string) (pv.CloudProvision
 			OssBucket:       properties["oss_bucket"],
 			OssEndpoint:     properties["oss_endpoint"],
 			CaaImage:        properties["caa_image"],
+			ClusterType:     properties["cluster_type"],
 		}
 
 		return AlibabaCloudProps, nil
@@ -105,6 +107,8 @@ func (a *OnPremCluster) GetProperties(ctx context.Context, cfg *envconf.Config) 
 		"rrsa_provider_arn": a.RrsaProviderArn,
 		"oss_bucket":        a.OssBucket,
 		"oss_endpoint":      a.OssEndpoint,
+		"caa_image":         a.CaaImage,
+		"cluster_type":      a.ClusterType,
 	}
 
 	return props
@@ -234,6 +238,7 @@ func (a *AlibabaCloudInstallOverlay) Delete(ctx context.Context, cfg *envconf.Co
 func (a *AlibabaCloudInstallOverlay) Edit(ctx context.Context, cfg *envconf.Config, properties map[string]string) error {
 	var err error
 
+	log.Infof("CAA image: %v", properties["caa_image"])
 	image := strings.Split(properties["caa_image"], ":")[0]
 	tag := strings.Split(properties["caa_image"], ":")[1]
 	log.Infof("Updating caa image with %s", image)
