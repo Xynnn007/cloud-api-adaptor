@@ -152,7 +152,7 @@ func DoTestCreatePeerPodContainerWithExternalIPAccess(t *testing.T, e env.Enviro
 
 func DoTestCreatePeerPodWithJob(t *testing.T, e env.Environment, assert CloudAssert) {
 	jobName := "job-pi"
-	image := "quay.io/prometheus/busybox:latest"
+	image := utils.RewriteImageRef("quay.io/prometheus/busybox:latest")
 	job := NewJob(E2eNamespace, jobName, 8, image)
 	expectedPodLogString := "3.14"
 	NewTestCase(t, e, "JobPeerPod", assert, "Job has been created").WithJob(job).WithExpectedPodLogString(expectedPodLogString).Run()
@@ -180,7 +180,7 @@ func DoTestCreateConfidentialPod(t *testing.T, e env.Environment, assert CloudAs
 
 func DoTestCreatePeerPodAndCheckWorkDirLogs(t *testing.T, e env.Environment, assert CloudAssert) {
 	podName := "workdirpod"
-	imageName := "quay.io/confidential-containers/test-images:testworkdir"
+	imageName := utils.RewriteImageRef("quay.io/confidential-containers/test-images:testworkdir")
 	pod := NewPod(E2eNamespace, podName, podName, imageName, WithRestartPolicy(v1.RestartPolicyOnFailure))
 	expectedPodLogString := "/other"
 	NewTestCase(t, e, "WorkDirPeerPod", assert, "Peer pod with work directory has been created").WithPod(pod).WithExpectedPodLogString(expectedPodLogString).WithCustomPodState(v1.PodSucceeded).Run()
@@ -188,7 +188,7 @@ func DoTestCreatePeerPodAndCheckWorkDirLogs(t *testing.T, e env.Environment, ass
 
 func DoTestCreatePeerPodAndCheckEnvVariableLogsWithImageOnly(t *testing.T, e env.Environment, assert CloudAssert) {
 	podName := "env-variable-in-image"
-	imageName := "quay.io/confidential-containers/test-images:testenv"
+	imageName := utils.RewriteImageRef("quay.io/confidential-containers/test-images:testenv")
 	pod := NewPod(E2eNamespace, podName, podName, imageName, WithRestartPolicy(v1.RestartPolicyOnFailure))
 	expectedPodLogString := "ISPRODUCTION=false"
 	NewTestCase(t, e, "EnvVariablePeerPodWithImageOnly", assert, "Peer pod with environmental variables has been created").WithPod(pod).WithExpectedPodLogString(expectedPodLogString).WithCustomPodState(v1.PodSucceeded).Run()
@@ -204,7 +204,7 @@ func DoTestCreatePeerPodAndCheckEnvVariableLogsWithDeploymentOnly(t *testing.T, 
 
 func DoTestCreatePeerPodAndCheckEnvVariableLogsWithImageAndDeployment(t *testing.T, e env.Environment, assert CloudAssert) {
 	podName := "env-variable-in-both"
-	imageName := "quay.io/confidential-containers/test-images:testenv"
+	imageName := utils.RewriteImageRef("quay.io/confidential-containers/test-images:testenv")
 	pod := NewPod(E2eNamespace, podName, podName, imageName, WithRestartPolicy(v1.RestartPolicyOnFailure), WithEnvironmentVariables([]v1.EnvVar{{Name: "ISPRODUCTION", Value: "true"}}))
 	expectedPodLogString := "ISPRODUCTION=true"
 	NewTestCase(t, e, "EnvVariablePeerPodWithBoth", assert, "Peer pod with environmental variables has been created").WithPod(pod).WithExpectedPodLogString(expectedPodLogString).WithCustomPodState(v1.PodSucceeded).Run()
@@ -212,7 +212,7 @@ func DoTestCreatePeerPodAndCheckEnvVariableLogsWithImageAndDeployment(t *testing
 
 func DoTestCreatePeerPodWithLargeImage(t *testing.T, e env.Environment, assert CloudAssert) {
 	podName := "largeimage-pod"
-	imageName := "quay.io/confidential-containers/test-images:largeimage"
+	imageName := utils.RewriteImageRef("quay.io/confidential-containers/test-images:largeimage")
 	// Need more timeout to pull large image data
 	timeout := "300"
 	annotationData := map[string]string{

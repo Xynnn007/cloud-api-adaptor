@@ -41,8 +41,14 @@ jobs:
      contains(github.event.pull_request.labels.*.name, 'test_e2e_alibabacloud') ||
      contains(github.event.pull_request.labels.*.name, 'test_e2e_libvirt') ||
      contains(github.event.pull_request.labels.*.name, 'test_e2e_byom')
+    outputs:
+      # Container registries require lowercase repository paths.
+      registry: ${{ steps.registry.outputs.registry }}
     steps:
-      - run: "true"
+      - id: registry
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "registry=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
   e2e:
     uses: ./.github/workflows/e2e_run_all.yaml
     needs: [authorize]
@@ -50,7 +56,7 @@ jobs:
       caa_image_tag: ci-pr${{ github.event.number }}
       git_ref: ${{ github.event.pull_request.head.sha }}
       podvm_image_tag: ci-pr${{ github.event.number }}
-      registry: ghcr.io/${{ github.repository_owner }}
+      registry: ${{ needs.authorize.outputs.registry }}
     permissions:
       id-token: write  # Required for OIDC authentication
       contents: read  # Required to checkout code

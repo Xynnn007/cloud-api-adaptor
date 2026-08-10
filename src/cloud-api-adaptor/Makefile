@@ -27,8 +27,12 @@ ifneq ($(TEST_E2E_PARALLEL),)
 TEST_E2E_PARALLEL_FLAG := -parallel $(TEST_E2E_PARALLEL)
 endif
 # To run a sub-set of tests, set an unanchored regex matching the test's name as in go's test -run option.
+# Default empty regex (''). If RUN_TESTS is exported empty from the environment,
+# keep a quoted empty value so `go test -run` does not consume the package path.
 RUN_TESTS ?= ''
-
+ifeq ($(strip $(RUN_TESTS)),)
+RUN_TESTS := ''
+endif
 RESOURCE_CTRL ?= true
 WEBHOOK_ENABLED ?= true
 # BUILTIN_CLOUD_PROVIDERS is used for binary build -- what providers are built in the binaries.

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -43,6 +44,16 @@ func (h *Helm) ConfigureSubchartImages() {
 			log.Infof("Configuring helm: webhook image override (%s)", img)
 		}
 	}
+
+	// Private-registry overrides for kata-deploy subchart images.
+	if img := os.Getenv("KATA_DEPLOY_IMAGE"); img != "" {
+		h.OverrideValues["kata-deploy.image.reference"] = img
+		log.Infof("Configuring helm: kata-deploy image override (%s)", img)
+	}
+	if img := os.Getenv("KATA_KUBECTL_IMAGE"); img != "" {
+		h.OverrideValues["kata-deploy.kubectlImage.reference"] = img
+		log.Infof("Configuring helm: kata kubectl image override (%s)", img)
+	}
 }
 
 // Helm represents a Helm chart installer
@@ -60,6 +71,10 @@ type Helm struct {
 
 // NewHelm creates a new Helm instance and builds chart dependencies
 func NewHelm(chartPath, namespace, releaseName, provider string, debug bool) (*Helm, error) {
+	if err := maybeRewriteKataDeployChartRepo(chartPath); err != nil {
+		return nil, err
+	}
+
 	// Build chart dependencies
 	args := []string{"dependency", "build", chartPath}
 	cmd := exec.Command("helm", args...)
@@ -81,6 +96,31 @@ func NewHelm(chartPath, namespace, releaseName, provider string, debug bool) (*H
 		OverrideProviderValues:  make(map[string]string),
 		OverrideProviderSecrets: make(map[string]string),
 	}, nil
+}
+
+// maybeRewriteKataDeployChartRepo rewrites the kata-deploy OCI chart repository in
+// Chart.yaml when HELM_KATA_DEPLOY_CHART_REPO is set (private mirror testing).
+func maybeRewriteKataDeployChartRepo(chartPath string) error {
+	repo := os.Getenv("HELM_KATA_DEPLOY_CHART_REPO")
+	if repo == "" {
+		return nil
+	}
+	chartYAML := filepath.Join(chartPath, "Chart.yaml")
+	data, err := os.ReadFile(chartYAML)
+	if err != nil {
+		return fmt.Errorf("read Chart.yaml: %w", err)
+	}
+	const defaultRepo = "oci://ghcr.io/kata-containers/kata-deploy-charts"
+	if !strings.Contains(string(data), defaultRepo) {
+		log.Warnf("HELM_KATA_DEPLOY_CHART_REPO set but default repo %q not found in Chart.yaml", defaultRepo)
+		return nil
+	}
+	updated := strings.ReplaceAll(string(data), defaultRepo, repo)
+	if err := os.WriteFile(chartYAML, []byte(updated), 0644); err != nil {
+		return fmt.Errorf("write Chart.yaml: %w", err)
+	}
+	log.Infof("Rewrote kata-deploy chart repository to %s", repo)
+	return nil
 }
 
 // Install installs the Helm chart. Equivalent to the `helm install` command

@@ -25,13 +25,26 @@ concurrency:
 permissions: {}
 
 jobs:
+  prepare:
+    name: prepare
+    runs-on: ubuntu-24.04
+    outputs:
+      # Container registries require lowercase repository paths.
+      registry: ${{ steps.registry.outputs.registry }}
+    steps:
+      - id: registry
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "registry=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
+
   e2e:
     uses: ./.github/workflows/e2e_run_all.yaml
+    needs: [prepare]
     with:
       caa_image_tag: latest
       git_ref: "${{ inputs.git_ref }}"
       podvm_image_tag: latest
-      registry: ghcr.io/${{ github.repository_owner }}
+      registry: ${{ needs.prepare.outputs.registry }}
     permissions:
       id-token: write  # Required for OIDC authentication
       contents: read  # Required to checkout code

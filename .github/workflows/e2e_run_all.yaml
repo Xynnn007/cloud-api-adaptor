@@ -27,15 +27,15 @@ on:
         type: string
     secrets:
       AWS_IAM_ROLE_ARN:
-        required: true
+        required: false
       ALIBABA_CLOUD_ROLE_ARN:
         required: false
       ALIBABA_CLOUD_OIDC_PROVIDER_ARN:
         required: false
       QUAY_PASSWORD:
-        required: true
+        required: false
       REGISTRY_CREDENTIAL_ENCODED:
-        required: true
+        required: false
 
 env:
   # cloud-api-adaptor image registry
@@ -70,6 +70,7 @@ jobs:
       QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
 
   podvm_mkosi_s390x:
+    if: ${{ vars.PRIVATE_E2E_ONLY_ALIBABA != 'true' }}
     uses: ./.github/workflows/podvm_mkosi.yaml
     with:
       registry: ${{ inputs.registry }}
@@ -102,6 +103,7 @@ jobs:
       QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
 
   caa_image_s390x:
+    if: ${{ vars.PRIVATE_E2E_ONLY_ALIBABA != 'true' }}
     uses: ./.github/workflows/caa_build_and_push.yaml
     with:
       registry: ${{ inputs.registry }}
@@ -133,6 +135,7 @@ jobs:
       QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
 
   peerpod_ctrl_image_s390x:
+    if: ${{ vars.PRIVATE_E2E_ONLY_ALIBABA != 'true' }}
     uses: ./.github/workflows/peerpod-ctrl_build_and_push.yaml
     with:
       registry: ${{ inputs.registry }}
@@ -163,9 +166,10 @@ jobs:
   aws:
     name: aws
     if: |
-      github.event_name == 'schedule' ||
+      vars.PRIVATE_E2E_ONLY_ALIBABA != 'true' &&
+      (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'test_e2e_aws')
+      contains(github.event.pull_request.labels.*.name, 'test_e2e_aws'))
     needs: [podvm_mkosi_amd64, caa_image_amd64, peerpod_ctrl_image_amd64, webhook_image]
     strategy:
       fail-fast: false
@@ -218,10 +222,11 @@ jobs:
   libvirt_amd64:
     name: E2E tests on libvirt for the amd64 architecture
     if: |
-      github.event_name == 'schedule' ||
+      vars.PRIVATE_E2E_ONLY_ALIBABA != 'true' &&
+      (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'test_e2e_libvirt') ||
-      contains(github.event.pull_request.labels.*.name, 'test_e2e_libvirt_amd64')
+      contains(github.event.pull_request.labels.*.name, 'test_e2e_libvirt_amd64'))
     needs: [podvm_mkosi_amd64, caa_image_amd64, peerpod_ctrl_image_amd64, webhook_image]
     uses: ./.github/workflows/e2e_libvirt.yaml
     with:
@@ -238,10 +243,11 @@ jobs:
   libvirt_s390x:
     name: E2E tests on libvirt for the s390x architecture
     if: |
-      github.event_name == 'schedule' ||
+      vars.PRIVATE_E2E_ONLY_ALIBABA != 'true' &&
+      (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'test_e2e_libvirt') ||
-      contains(github.event.pull_request.labels.*.name, 'test_e2e_libvirt_s390x')
+      contains(github.event.pull_request.labels.*.name, 'test_e2e_libvirt_s390x'))
     needs: [podvm_mkosi_s390x, caa_image_s390x, peerpod_ctrl_image_s390x, webhook_image]
     uses: ./.github/workflows/e2e_libvirt.yaml
     with:
@@ -258,9 +264,10 @@ jobs:
   byom:
     name: byom
     if: |
-      github.event_name == 'schedule' ||
+      vars.PRIVATE_E2E_ONLY_ALIBABA != 'true' &&
+      (github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'test_e2e_byom')
+      contains(github.event.pull_request.labels.*.name, 'test_e2e_byom'))
     needs: [caa_image_amd64, peerpod_ctrl_image_amd64, webhook_image]
     uses: ./.github/workflows/e2e_byom.yaml
     with:

@@ -53,5 +53,5 @@ func GetImage(image string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("getTestImage: failed to read image: %s, with error %v", image, err)
 	}
-	return testVersions.ContainerImage[image].getImage(), nil
+	return RewriteImageRef(testVersions.ContainerImage[image].getImage()), nil
 }
