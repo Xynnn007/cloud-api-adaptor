@@ -131,7 +131,8 @@ daemonset:
   # Workload Identity), or the equivalent GCP / AWS annotation, so the
   # daemonset can authenticate to the cloud provider.
   serviceAccount:
-    annotations: {}
+    annotations:
+      pod-identity.alibabacloud.com/role-name: ack-caa
 
 # peerpod-ctrl subchart configuration
 # Manages lifecycle of peer pod cloud resources and cleans up dangling VMs

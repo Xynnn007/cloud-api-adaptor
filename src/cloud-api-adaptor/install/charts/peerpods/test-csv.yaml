@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-caa-demo
+spec:
+  runtimeClassName: kata-remote
+  containers:
+    - image: alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/alinux3:latest
+      name: hello
+      command:
+      - sh
+      - -c
+      - 'echo hello && sleep infinity'

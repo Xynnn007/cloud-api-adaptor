@@ -36,21 +36,28 @@ func (i *instanceTypes) Set(value string) error {
 }
 
 type Config struct {
-	AccessKeyID          string
-	SecretKey            string
-	Region               string
-	ImageID              string
-	InstanceType         string
-	KeyName              string
-	VpcID                string
-	VswitchID            string
-	SecurityGroupIDs     securityGroupIds
-	InstanceTypes        instanceTypes
-	InstanceTypeSpecList []provider.InstanceTypeSpec
-	Tags                 provider.KeyValueFlag
-	UsePublicIP          bool
-	SystemDiskSize       int
-	DisableCVM           bool
+	AccessKeyID               string
+	SecretKey                 string
+	Region                    string
+	EcsEndpoint               string
+	VpcEndpoint               string
+	StsEndpoint               string
+	IgnoreSSL                 bool
+	ImageID                   string
+	InstanceType              string
+	KeyName                   string
+	VpcID                     string
+	VswitchID                 string
+	SecurityGroupIDs          securityGroupIds
+	InstanceTypes             instanceTypes
+	InstanceTypeSpecList      []provider.InstanceTypeSpec
+	Tags                      provider.KeyValueFlag
+	UsePublicIP               bool
+	SystemDiskSize            int
+	SystemDiskCategory        string
+	InstanceReadyTimeout      int
+	ConfidentialComputingMode string
+	DisableCVM                bool
 }
 
 func (c Config) Redact() Config {

@@ -25,6 +25,15 @@ providerConfigs:
     # Use non-CVMs for peer pods
     # (default: "false")
     # DISABLECVM: "false"
+    # true: skip SecurityOptions.ConfidentialComputingMode=TDX (Intel TDX only);
+    # required for Hygon CSV instance families (ecs.g8h-csv-*) whose confidential
+    # capability comes from the family itself, not the TDX API flag
+    DISABLECVM: "true"
+
+    # Confidential computing mode passed to SecurityOptions.ConfidentialComputingMode.
+    # Must match what the ECS console sends for CSV confidential VMs ("CSV" on Hygon);
+    # when set, it overrides DISABLECVM. When empty: DISABLECVM=false -> TDX, true -> none.
+    CONFIDENTIAL_COMPUTING_MODE: "CSV"
 
     # Enable encrypted scratch space for pod VMs
     # (default: "false")
@@ -40,7 +49,7 @@ providerConfigs:
 
     # Pod VM image id
     # (required)
-    IMAGEID: ""
+    IMAGEID: "aliyun_3_x86_64_20G_pro_confidential_alibase_20251111.vhd"
 
     # Default initdata for all Pods
     # (default: "")
@@ -65,6 +74,16 @@ providerConfigs:
     # Pod VM instance type
     # (default: "ecs.g8i.xlarge")
     # PODVM_INSTANCE_TYPE: "ecs.g8i.xlarge"
+    PODVM_INSTANCE_TYPE: "ecs.g8h-csv-2numa-hg-k10-c1m1.large"
+
+    # System disk category for the Pod VMs; must be available in the target zone
+    # (default: "cloud_essd"; private cloud zones without ESSD can use cloud_ssd / cloud_efficiency)
+    SYSTEM_DISK_CATEGORY: "cloud_pperf"
+
+    # Timeout (seconds) to wait for the Pod VM to reach Running status before
+    # connecting to the agent forwarder on port 15150
+    # (default: 180)
+    INSTANCE_READY_TIMEOUT: "180"
 
     # [EXPERIMENTAL] Comma separated CIDRs for local pod subnets
     # (default: "")
@@ -76,7 +95,26 @@ providerConfigs:
 
     # Region
     # (default: "cn-beijing")
-    # REGION: "cn-beijing"
+    REGION: "cn-wulan-env213-d01"
+
+    # ECS API endpoint override for private cloud, used as-is by the SDK
+    # (skips the default regional resolution which builds ecs.<region>.aliyuncs.com)
+    # ECS_ENDPOINT: "ecs.cn-wulan-env213-d01.aliyuncs.com"
+    ECS_ENDPOINT: "ecs-internal.inter.env213.shuguang.com"
+
+    # VPC API endpoint override for private cloud, used as-is by the SDK
+    # (skips the default regional resolution which builds vpc.<region>.aliyuncs.com)
+    # VPC_ENDPOINT: "vpc.cn-wulan-env213-d01.aliyuncs.com"
+    VPC_ENDPOINT: "vpc-internal.inter.env213.shuguang.com"
+
+    # Skip TLS certificate verification for ECS/VPC API endpoints
+    # (private cloud endpoints with self-signed / SAN-less certs)
+    IGNORE_SSL: "true"
+
+    # STS endpoint for RRSA AssumeRoleWithOIDC in private cloud;
+    # when set, the adaptor calls it directly instead of resolving sts.aliyuncs.com
+    # (adjust the domain if your environment uses a different STS gateway)
+    STS_ENDPOINT: "sts-vpc.inter.env213.shuguang.com"
 
     # Unix domain socket path of remote hypervisor service
     # (default: "")
@@ -85,6 +123,7 @@ providerConfigs:
     # Security Group Ids to be used for the Pod VM, comma separated
     # (default: "cn-beijing")
     # SECURITY_GROUP_IDS: "cn-beijing"
+    SECURITY_GROUP_IDS: "sg-7ng01x2wjskl2ht9pu8f"
 
     # System Disk size (in GiB) for the Pod VMs
     # (default: "40")
@@ -116,7 +155,7 @@ providerConfigs:
 
     # vSwitch ID to be used for the Pod VMs
     # (required)
-    VSWITCH_ID: ""
+    VSWITCH_ID: "vsw-7ng2zz4qlz50srfniwom2"
 
     # VXLAN UDP port number (VXLAN tunnel mode only
     # (default: "")

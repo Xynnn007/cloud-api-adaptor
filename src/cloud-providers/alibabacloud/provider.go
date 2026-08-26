@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/netip"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -97,17 +98,42 @@ func NewProvider(config *Config) (provider.Provider, error) {
 
 	var c openapi.Config
 	if len(config.AccessKeyID) == 0 || len(config.SecretKey) == 0 {
-		logger.Printf("ALIBABACLOUD_ACCESS_KEY_ID and ALIBABACLOUD_ACCESS_KEY_SECRET not provided, try using ACK RRSA (ALIBABA_CLOUD_ROLE_ARN, ALIBABA_CLOUD_OIDC_PROVIDER_ARN, ALIBABA_CLOUD_OIDC_TOKEN_FILE) to get credential...")
-		cred, err := credentials.NewCredential(nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to pass authentication of alibaba cloud: %v", err)
+		roleArn := os.Getenv(EnvRoleArn)
+		oidcProviderArn := os.Getenv(EnvOidcProviderArn)
+		oidcTokenFile := os.Getenv(EnvOidcTokenFile)
+		useCustomSTS := len(config.StsEndpoint) > 0 && roleArn != "" && oidcProviderArn != "" && oidcTokenFile != ""
+
+		var cred credentials.Credential
+		var err error
+		if useCustomSTS {
+			logger.Printf("Use custom STS endpoint %s for RRSA AssumeRoleWithOIDC (IgnoreSSL=%v)", config.StsEndpoint, config.IgnoreSSL)
+			cred = credentials.FromCredentialsProvider("oidc_role_arn", &stsOIDCCredentialsProvider{
+				stsEndpoint:     config.StsEndpoint,
+				roleArn:         roleArn,
+				oidcProviderArn: oidcProviderArn,
+				oidcTokenFile:   oidcTokenFile,
+				insecureSSL:     config.IgnoreSSL,
+			})
+		} else {
+			logger.Printf("ALIBABACLOUD_ACCESS_KEY_ID and ALIBABACLOUD_ACCESS_KEY_SECRET not provided, try using ACK RRSA (ALIBABA_CLOUD_ROLE_ARN, ALIBABA_CLOUD_OIDC_PROVIDER_ARN, ALIBABA_CLOUD_OIDC_TOKEN_FILE) to get credential...")
+			cred, err = credentials.NewCredential(nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to pass authentication of alibaba cloud: %v", err)
+			}
 		}
 
-		_, err = cred.GetCredential()
+		credModel, err := cred.GetCredential()
+		if err != nil && useCustomSTS {
+			logger.Printf("custom STS RRSA failed (%v), fallback to default credential chain", err)
+			cred, err = credentials.NewCredential(nil)
+			if err == nil {
+				credModel, err = cred.GetCredential()
+			}
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to get credential of alibaba cloud: %v", err)
 		}
-
+		logger.Printf("credential type: %s, provider: %s", tea.StringValue(credModel.Type), tea.StringValue(credModel.ProviderName))
 		c = openapi.Config{
 			Credential: cred,
 			RegionId:   tea.String(config.Region),
@@ -122,20 +148,38 @@ func NewProvider(config *Config) (provider.Provider, error) {
 		}
 	}
 
-	ecsClient, err := ecs.NewClient(&c)
+	ecsConfig := c
+	if len(config.EcsEndpoint) > 0 {
+		logger.Printf("Use custom ECS endpoint: %s", config.EcsEndpoint)
+		ecsConfig.Endpoint = tea.String(config.EcsEndpoint)
+	}
+	ecsRaw, err := ecs.NewClient(&ecsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create alibaba cloud ecs client error: %v", err)
 	}
 
-	vpcClient, err := vpc.NewClient(&c)
+	vpcConfig := c
+	if len(config.VpcEndpoint) > 0 {
+		logger.Printf("Use custom VPC endpoint: %s", config.VpcEndpoint)
+		vpcConfig.Endpoint = tea.String(config.VpcEndpoint)
+	}
+	vpcRaw, err := vpc.NewClient(&vpcConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create alibaba cloud vpc client error: %v", err)
 	}
 
+	var ecsCli ecsClient = ecsRaw
+	var vpcCli vpcClient = vpcRaw
+	if config.IgnoreSSL {
+		logger.Printf("IgnoreSSL enabled: skipping TLS certificate verification for ECS/VPC API endpoints")
+		ecsCli = insecureEcsClient{inner: ecsRaw}
+		vpcCli = insecureVpcClient{inner: vpcRaw}
+	}
+
 	provider := &alibabaCloudProvider{
-		ecsClient:     ecsClient,
+		ecsClient:     ecsCli,
 		serviceConfig: config,
-		vpcClient:     vpcClient,
+		vpcClient:     vpcCli,
 		eips:          make(map[string]*string),
 	}
 
@@ -259,20 +303,34 @@ func (p *alibabaCloudProvider) CreateInstance(ctx context.Context, podName, sand
 	}
 
 	if !p.serviceConfig.DisableCVM {
-		//  Add IntelTdx Cpu options to the instance
+		//  Add Cpu security options to the instance
+		mode := p.serviceConfig.ConfidentialComputingMode
+		if len(mode) == 0 {
+			mode = "TDX"
+		}
 		req.SecurityOptions = &ecs.RunInstancesRequestSecurityOptions{
-			ConfidentialComputingMode: tea.String("TDX"),
+			ConfidentialComputingMode: tea.String(mode),
+		}
+	} else if len(p.serviceConfig.ConfidentialComputingMode) > 0 {
+		// Explicit mode wins over DisableCVM so Hygon CSV families can pass their
+		// own mode (e.g. the value the console uses) instead of being forced to none
+		req.SecurityOptions = &ecs.RunInstancesRequestSecurityOptions{
+			ConfidentialComputingMode: tea.String(p.serviceConfig.ConfidentialComputingMode),
 		}
 	}
 
 	// Add block device mappings to the instance to set the root volume size
 	if p.serviceConfig.SystemDiskSize > 0 {
 		req.ImageId = tea.String(p.serviceConfig.ImageID)
+		systemDiskCategory := p.serviceConfig.SystemDiskCategory
+		if len(systemDiskCategory) == 0 {
+			systemDiskCategory = "cloud_essd"
+		}
 		req.SystemDisk = &ecs.RunInstancesRequestSystemDisk{
 			Size:     tea.String(strconv.Itoa(p.serviceConfig.SystemDiskSize)),
-			Category: tea.String("cloud_essd"),
+			Category: tea.String(systemDiskCategory),
 		}
-		logger.Printf("Setting the SystemDisk size to %d GiB with ImageId %s", p.serviceConfig.SystemDiskSize, p.serviceConfig.ImageID)
+		logger.Printf("Setting the SystemDisk size to %d GiB (category %s) with ImageId %s", p.serviceConfig.SystemDiskSize, systemDiskCategory, p.serviceConfig.ImageID)
 	}
 
 	logger.Printf("CreateInstance: name: %q", instanceName)
@@ -291,14 +349,23 @@ func (p *alibabaCloudProvider) CreateInstance(ctx context.Context, podName, sand
 		Name: instanceName,
 	}
 
-	// Wait instance to create
-	err = p.waitUntilTimeout(time.Duration(time.Minute*1), func() (bool, error) {
+	// Wait for the instance to reach Running status before handing it over to the
+	// agent proxy; dialing the forwarder while the VM is still Starting is pointless
+	readyTimeout := time.Duration(p.serviceConfig.InstanceReadyTimeout) * time.Second
+	if readyTimeout <= 0 {
+		readyTimeout = time.Duration(180) * time.Second
+	}
+	lastStatus := "unknown"
+	err = p.waitUntilTimeout(readyTimeout, func() (bool, error) {
 		req := &ecs.DescribeInstanceAttributeRequest{
 			InstanceId: tea.String(instanceID),
 		}
-		_, err := p.ecsClient.DescribeInstanceAttribute(req)
+		resp, err := p.ecsClient.DescribeInstanceAttribute(req)
 		if err == nil {
-			return true, nil
+			if resp.Body != nil && resp.Body.Status != nil {
+				lastStatus = *resp.Body.Status
+			}
+			return lastStatus == "Running", nil
 		}
 
 		if *err.(*tea.SDKError).StatusCode == 404 {
@@ -312,9 +379,9 @@ func (p *alibabaCloudProvider) CreateInstance(ctx context.Context, podName, sand
 		return false, fmt.Errorf("failed to describe instance %s: %v", instanceID, err)
 	})
 	if err != nil {
-		return instance, fmt.Errorf("failed to wait for instance %s to be ready: %v", instanceID, err)
+		return instance, fmt.Errorf("failed to wait for instance %s to reach Running (last status: %s) within %v: %v", instanceID, lastStatus, readyTimeout, err)
 	}
-	logger.Printf("Instance %s is ready.", instanceID)
+	logger.Printf("Instance %s is ready (status Running).", instanceID)
 
 	ips, err := p.getIPs(*result.Body.InstanceIdSets.InstanceIdSet[0], p.ecsClient)
 	if err != nil {
@@ -375,7 +442,7 @@ func (p *alibabaCloudProvider) DeleteInstance(ctx context.Context, instanceID st
 		resp, err := p.ecsClient.DeleteInstance(&req)
 		if err != nil {
 			if *err.(*tea.SDKError).Code == "IncorrectInstanceStatus" {
-				logger.Printf("instance %s is not in the correct state to be deleted, retrying", instanceID)
+				logger.Printf("instance %s is not in the correct state to be deleted, retrying: %v", instanceID, err)
 				return false, nil
 			}
 
@@ -386,6 +453,9 @@ func (p *alibabaCloudProvider) DeleteInstance(ctx context.Context, instanceID st
 
 			logger.Printf("failed to delete an instance: %v and the response is %v", err, resp)
 			return false, fmt.Errorf("failed to delete an instance %s: %+v", instanceID, err)
+		}
+		if resp != nil && resp.Body != nil && resp.Body.RequestId != nil {
+			logger.Printf("DeleteInstance for %s accepted, RequestId: %s", instanceID, *resp.Body.RequestId)
 		}
 
 		return true, nil

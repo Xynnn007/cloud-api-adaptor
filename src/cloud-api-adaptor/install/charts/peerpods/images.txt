@@ -1,0 +1,6 @@
+coco-cloud-api-adaptor:2274f17ad298088eeefa20fe4b3a58a350ceab4e
+peerpod-ctrl:v0.19.0
+kube-rbac-proxy:v0.14.0
+peer-pods-webhook:v0.19.0
+coco-kata-deploy:3.28.0
+kata-containers-kubectl:v0.19.0
