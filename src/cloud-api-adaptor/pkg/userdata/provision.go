@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -153,8 +154,8 @@ func newProvider(ctx context.Context) (UserDataProvider, error) {
 	return nil, fmt.Errorf("unsupported user data provider")
 }
 
-func retrieveCloudConfig(ctx context.Context, provider UserDataProvider) (*CloudConfig, error) {
-	var cc CloudConfig
+func retrieveCloudConfig(ctx context.Context, provider UserDataProvider) ([]byte, error) {
+	var userData []byte
 
 	// Use retry.Do to retry the getUserData function until it succeeds
 	// This is needed because the VM's userData is not available immediately
@@ -164,15 +165,10 @@ func retrieveCloudConfig(ctx context.Context, provider UserDataProvider) (*Cloud
 			if err != nil {
 				return fmt.Errorf("failed to get user data: %w", err)
 			}
-
-			// We parse user data now, b/c we want to retry if it's not valid
-			parsed, err := parseUserData(ud)
-			if err != nil {
-				return fmt.Errorf("failed to parse user data: %w", err)
+			if len(ud) == 0 {
+				return fmt.Errorf("user data is empty")
 			}
-			cc = *parsed
-
-			// Valid user data, stop retrying
+			userData = ud
 			return nil
 		},
 		retry.Context(ctx),
@@ -184,7 +180,7 @@ func retrieveCloudConfig(ctx context.Context, provider UserDataProvider) (*Cloud
 		}),
 	)
 
-	return &cc, err
+	return userData, err
 }
 
 func parseUserData(userData []byte) (*CloudConfig, error) {
@@ -194,6 +190,64 @@ func parseUserData(userData []byte) (*CloudConfig, error) {
 		return nil, err
 	}
 	return &cc, nil
+}
+
+func isScriptUserData(userData []byte) bool {
+	trimmed := bytesTrimSpace(userData)
+	return len(trimmed) >= 2 && trimmed[0] == '#' && trimmed[1] == '!'
+}
+
+// bytesTrimSpace avoids importing bytes for a single helper.
+func bytesTrimSpace(b []byte) []byte {
+	start, end := 0, len(b)
+	for start < end && (b[start] == ' ' || b[start] == '\t' || b[start] == '\n' || b[start] == '\r') {
+		start++
+	}
+	for end > start && (b[end-1] == ' ' || b[end-1] == '\t' || b[end-1] == '\n' || b[end-1] == '\r') {
+		end--
+	}
+	return b[start:end]
+}
+
+func executeScriptUserData(script []byte) error {
+	tmpFile, err := os.CreateTemp("", "peerpod-user-data-*.sh")
+	if err != nil {
+		return fmt.Errorf("create temp script: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if err := os.Chmod(tmpPath, 0700); err != nil {
+		return fmt.Errorf("chmod temp script: %w", err)
+	}
+	if _, err := tmpFile.Write(script); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("write temp script: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp script: %w", err)
+	}
+
+	cmd := exec.Command("/bin/bash", tmpPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("execute user-data script: %w: %s", err, string(out))
+	}
+	logger.Printf("Executed user-data provisioning script\n")
+	return nil
+}
+
+func processUserData(cfg *Config, userData []byte) error {
+	if isScriptUserData(userData) {
+		logger.Printf("Detected script user-data format\n")
+		return executeScriptUserData(userData)
+	}
+
+	cc, err := parseUserData(userData)
+	if err != nil {
+		return fmt.Errorf("failed to parse user data: %w", err)
+	}
+	return processCloudConfig(cfg, cc)
 }
 
 func writeFile(path string, bytes []byte) error {
@@ -312,13 +366,13 @@ func ProvisionFiles(cfg *Config) error {
 	// all providers need extract files from initdata and calculate the hash value for attesters usage
 	provider, _ := newProvider(ctx)
 	if provider != nil {
-		cc, err := retrieveCloudConfig(ctx, provider)
+		userData, err := retrieveCloudConfig(ctx, provider)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve cloud config: %w", err)
+			return fmt.Errorf("failed to retrieve user data: %w", err)
 		}
 
-		if err = processCloudConfig(cfg, cc); err != nil {
-			return fmt.Errorf("failed to process cloud config: %w", err)
+		if err = processUserData(cfg, userData); err != nil {
+			return fmt.Errorf("failed to process user data: %w", err)
 		}
 	} else {
 		logger.Printf("unsupported user data provider, we extract and calculate initdata hash only.\n")

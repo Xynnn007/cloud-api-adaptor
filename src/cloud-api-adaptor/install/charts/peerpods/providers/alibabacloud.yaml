@@ -55,6 +55,10 @@ providerConfigs:
     # (default: "")
     # INITDATA: ""
 
+    # Peer pod user-data format: cloud-config (write_files) or script (bash).
+    # private cloud delivers user-data as a script; use script here.
+    USER_DATA_FORMAT: "script"
+
     # SSH Keypair name to be used with the Pod VM
     # (default: "")
     # KEYNAME: ""

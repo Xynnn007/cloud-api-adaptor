@@ -22,6 +22,7 @@ import (
 	"github.com/confidential-containers/cloud-api-adaptor/src/cloud-api-adaptor/pkg/util/tlsconfig"
 	"github.com/confidential-containers/cloud-api-adaptor/src/cloud-api-adaptor/pkg/util/tlsutil"
 	provider "github.com/confidential-containers/cloud-api-adaptor/src/cloud-providers"
+	"github.com/confidential-containers/cloud-api-adaptor/src/cloud-providers/util/cloudinit"
 
 	"github.com/confidential-containers/cloud-api-adaptor/src/cloud-api-adaptor/pkg/podnetwork"
 	"github.com/confidential-containers/cloud-api-adaptor/src/cloud-api-adaptor/pkg/probe"
@@ -131,6 +132,7 @@ func (cfg *daemonConfig) Setup() (cmd.Starter, error) {
 		reg.StringWithEnv(&cfg.networkConfig.TunnelType, "tunnel-type", podnetwork.DefaultTunnelType, "TUNNEL_TYPE", "Tunnel provider")
 		reg.IntWithEnv(&cfg.networkConfig.VXLAN.Port, "vxlan-port", vxlan.DefaultVXLANPort, "VXLAN_PORT", "VXLAN UDP port number (VXLAN tunnel mode only")
 		reg.StringWithEnv(&cfg.serverConfig.Initdata, "initdata", "", "INITDATA", "Default initdata for all Pods")
+		reg.StringWithEnv(&cfg.serverConfig.UserDataFormat, "user-data-format", cloudinit.UserDataFormatCloudConfig, "USER_DATA_FORMAT", "Peer pod user-data format: cloud-config (write_files) or script (bash)")
 		reg.BoolWithEnv(&cfg.serverConfig.EnableCloudConfigVerify, "cloud-config-verify", false, "CLOUD_CONFIG_VERIFY", "Enable cloud config verify - should use it for production")
 		reg.IntWithEnv(&cfg.serverConfig.PeerPodsLimitPerNode, "peerpods-limit-per-node", 10, "PEERPODS_LIMIT_PER_NODE", "peer pods limit per node (default=10)")
 		reg.BoolWithEnv(&cfg.serverConfig.EnableScratchSpace, "enable-scratch-space", false, "ENABLE_SCRATCH_SPACE", "Enable encrypted scratch space for pod VMs")

@@ -39,7 +39,7 @@ type sandboxID string
 type sandbox struct {
 	agentProxy   proxy.AgentProxy
 	podNetwork   *tunneler.Config
-	cloudConfig  *cloudinit.CloudConfig
+	userDataGen  cloudinit.CloudConfigGenerator
 	id           sandboxID
 	podName      string
 	podNamespace string

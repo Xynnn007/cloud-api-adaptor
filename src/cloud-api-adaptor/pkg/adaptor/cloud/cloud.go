@@ -43,6 +43,7 @@ type ServerConfig struct {
 	ForwarderPort           string
 	ProxyTimeout            time.Duration
 	Initdata                string
+	UserDataFormat          string
 	EnableCloudConfigVerify bool
 	PeerPodsLimitPerNode    int
 	RootVolumeSize          int
@@ -286,7 +287,7 @@ func (s *cloudService) CreateVM(ctx context.Context, req *pb.CreateVMRequest) (r
 	if authJSON != nil {
 		logger.Printf("successfully retrieved pod image pull secrets for %s/%s", namespace, pod)
 		if len(authJSON) > cloudinit.DefaultAuthfileLimit {
-			logger.Printf("Credentials file is too large to be included in cloud-config")
+			logger.Printf("Credentials file is too large to be included in user-data")
 		} else {
 			cloudConfig.WriteFiles = append(cloudConfig.WriteFiles, cloudinit.WriteFile{
 				Path:    paths.AuthFilePath,
@@ -321,6 +322,11 @@ func (s *cloudService) CreateVM(ctx context.Context, req *pb.CreateVMRequest) (r
 		})
 	}
 
+	userDataGen, err := cloudinit.NewUserDataGenerator(s.serverConfig.UserDataFormat, cloudConfig.WriteFiles)
+	if err != nil {
+		return nil, fmt.Errorf("building user-data generator: %w", err)
+	}
+
 	sandbox := &sandbox{
 		id:           sid,
 		podName:      pod,
@@ -328,7 +334,7 @@ func (s *cloudService) CreateVM(ctx context.Context, req *pb.CreateVMRequest) (r
 		netNSPath:    netNSPath,
 		agentProxy:   agentProxy,
 		podNetwork:   podNetworkConfig,
-		cloudConfig:  cloudConfig,
+		userDataGen:  userDataGen,
 		spec:         vmSpec,
 	}
 
@@ -355,7 +361,7 @@ func (s *cloudService) StartVM(ctx context.Context, req *pb.StartVMRequest) (res
 		return nil, fmt.Errorf("getting sandbox: %w", err)
 	}
 
-	instance, err := s.provider.CreateInstance(ctx, sandbox.podName, string(sid), sandbox.cloudConfig, sandbox.spec)
+	instance, err := s.provider.CreateInstance(ctx, sandbox.podName, string(sid), sandbox.userDataGen, sandbox.spec)
 
 	// Cleanup instance if it was created but an error occurred (either during creation or later)
 	defer func() {
