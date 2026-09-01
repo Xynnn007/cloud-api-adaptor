@@ -87,17 +87,18 @@ rhel_RELEASE ?= 9
 alinux_RELEASE ?= 3
 
 ubuntu_amd64_IMAGE_URL := $(call query,cloudimg.ubuntu.$(ubuntu_RELEASE).amd64.url)
-ubuntu_amd64_IMAGE_CHECKSUM := $(call query,cloudimg.ubuntu.$(ubuntu_RELEASE).amd64.checksum)
+ubuntu_amd64_IMAGE_CHECKSUM := $(shell $(YQ_COMMAND) '.cloudimg.ubuntu.$(ubuntu_RELEASE).amd64.checksum' $(VERSIONS_SRC) 2>/dev/null)
 ubuntu_s390x_IMAGE_URL := $(call query,cloudimg.ubuntu.$(ubuntu_RELEASE).s390x.url)
-ubuntu_s390x_IMAGE_CHECKSUM := $(call query,cloudimg.ubuntu.$(ubuntu_RELEASE).s390x.checksum)
+ubuntu_s390x_IMAGE_CHECKSUM := $(shell $(YQ_COMMAND) '.cloudimg.ubuntu.$(ubuntu_RELEASE).s390x.checksum' $(VERSIONS_SRC) 2>/dev/null)
 ubuntu_arm64_IMAGE_URL := $(call query,cloudimg.ubuntu.$(ubuntu_RELEASE).arm64.url)
-ubuntu_arm64_IMAGE_CHECKSUM := $(call query,cloudimg.ubuntu.$(ubuntu_RELEASE).arm64.checksum)
+ubuntu_arm64_IMAGE_CHECKSUM := $(shell $(YQ_COMMAND) '.cloudimg.ubuntu.$(ubuntu_RELEASE).arm64.checksum' $(VERSIONS_SRC) 2>/dev/null)
 rhel_amd64_IMAGE_URL := $(call query,cloudimg.rhel.$(rhel_RELEASE).amd64.url)
-rhel_amd64_IMAGE_CHECKSUM := $(call query,cloudimg.rhel.$(rhel_RELEASE).amd64.checksum)
+rhel_amd64_IMAGE_CHECKSUM := $(shell $(YQ_COMMAND) '.cloudimg.rhel.$(rhel_RELEASE).amd64.checksum' $(VERSIONS_SRC) 2>/dev/null)
 rhel_s390x_IMAGE_URL := $(call query,cloudimg.rhel.$(rhel_RELEASE).s390x.url)
-rhel_s390x_IMAGE_CHECKSUM := $(call query,cloudimg.rhel.$(rhel_RELEASE).s390x.checksum)
+rhel_s390x_IMAGE_CHECKSUM := $(shell $(YQ_COMMAND) '.cloudimg.rhel.$(rhel_RELEASE).s390x.checksum' $(VERSIONS_SRC) 2>/dev/null)
 alinux_amd64_IMAGE_URL := $(call query,cloudimg.alinux.$(alinux_RELEASE).amd64.url)
-alinux_amd64_IMAGE_CHECKSUM := $(call query,cloudimg.alinux.$(alinux_RELEASE).amd64.checksum)
+# Checksum is optional; an empty value means the consumer should skip verification.
+alinux_amd64_IMAGE_CHECKSUM := $(shell $(YQ_COMMAND) '.cloudimg.alinux.$(alinux_RELEASE).amd64.checksum' $(VERSIONS_SRC) 2>/dev/null)
 
 KATA_REGISTRY := $(or $(KATA_REGISTRY), $(call query,oci.kata-containers.registry))
 KATA_REF := $(or $(KATA_REF), $(call query,oci.kata-containers.reference))

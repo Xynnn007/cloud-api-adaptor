@@ -1,0 +1,102 @@
+# Copyright Confidential Containers Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Build Pod VM binaries overlay for an Alibaba Cloud Linux 3 based image.
+#
+# - kata-agent: built from kata-containers source at KATA_REF
+# - guest-components (AA/CDH/ASR): installed from alinux3 yum packages
+# - CAA binaries + pause bundle: built/assembled locally (same as upstream)
+#
+# Build context must be the repository `src/` directory (see Makefile).
+#
+
+ARG ALINUX3_BUILDER_IMAGE="alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/alinux3:latest"
+
+FROM ${ALINUX3_BUILDER_IMAGE} AS builder
+
+ARG ARCH="x86_64"
+ARG GO_ARCH="amd64"
+ARG DISTRO_ARCH="amd64"
+ARG YQ_ARCH="amd64"
+ARG PROTOC_ARCH="x86_64"
+ARG GO_VERSION
+ARG PROTOC_VERSION
+ARG YQ_VERSION
+ARG YQ_CHECKSUM
+ARG ORAS_VERSION
+
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
+ENV http_proxy=${http_proxy} \
+    https_proxy=${https_proxy} \
+    no_proxy=${no_proxy} \
+    HTTP_PROXY=${http_proxy} \
+    HTTPS_PROXY=${https_proxy} \
+    NO_PROXY=${no_proxy}
+
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
+
+RUN yum install -y \
+        make gcc gcc-c++ git perl pkgconfig \
+        libseccomp-devel gpgme-devel device-mapper-devel libassuan-devel \
+        openssl-devel tpm2-tss-devel clang xz zstd jq curl ca-certificates \
+        unzip tar gzip which protobuf-compiler cmake \
+    && yum clean all
+
+ADD https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz /tmp/go.tar.gz
+RUN rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tar.gz && rm -f /tmp/go.tar.gz
+ENV PATH="/usr/local/go/bin:$PATH"
+
+# Rust toolchain for kata-agent source build
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:$PATH"
+RUN rustup target add ${ARCH}-unknown-linux-gnu
+
+ADD https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH} /usr/local/bin/yq
+RUN echo "${YQ_CHECKSUM#sha256:} /usr/local/bin/yq" | sha256sum -c
+RUN chmod a+x /usr/local/bin/yq
+
+ADD https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip /tmp/protoc.zip
+RUN unzip /tmp/protoc.zip -d /usr/local && rm -f /tmp/protoc.zip
+
+# oras is still required for the pause bundle (skopeo/umoci path uses local builds)
+ADD https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${DISTRO_ARCH}.tar.gz /tmp/oras.tar.gz
+RUN tar -C /usr/local/bin -xzf /tmp/oras.tar.gz && rm -f /tmp/oras.tar.gz
+
+FROM builder AS podvm_binaries_builder
+
+ARG TEE_PLATFORM=none
+ARG ARCH
+ARG DEFAULT_AGENT_POLICY_FILE=allow-all.rego
+ARG AUTHFILE
+ARG PAUSE_REPO
+ARG PAUSE_VERSION
+ARG PAUSE_BIN
+ARG IMAGE_NAME=alinux3-podvm-binaries
+ARG VERIFY_PROVENANCE=no
+
+ENV AUTHFILE=${AUTHFILE} \
+    PAUSE_REPO=${PAUSE_REPO} \
+    PAUSE_VERSION=${PAUSE_VERSION} \
+    PAUSE_BIN=${PAUSE_BIN} \
+    TEE_PLATFORM=${TEE_PLATFORM} \
+    ARCH=${ARCH} \
+    DEFAULT_AGENT_POLICY_FILE=${DEFAULT_AGENT_POLICY_FILE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    VERIFY_PROVENANCE=${VERIFY_PROVENANCE} \
+    IMAGE_URL=none \
+    IMAGE_CHECKSUM=none \
+    PODVM_DISTRO=alinux3
+
+COPY . /src
+
+WORKDIR /src/cloud-api-adaptor/podvm
+RUN ./hack/cross-build-extras.sh || true
+
+RUN LIBC=gnu make binaries-alinux3
+
+FROM scratch
+COPY --from=podvm_binaries_builder /src/cloud-api-adaptor/podvm/files /

@@ -34,9 +34,11 @@ VERIFY_PROVENANCE ?= no
 GUEST_COMPONENTS_REPO := confidential-containers/guest-components
 KATA_REPO := kata-containers/kata-containers
 
-# Verify that GUEST_COMPONENTS_REF is a sha-1 commit digest
+# Verify that GUEST_COMPONENTS_REF is a sha-1 commit digest (oras profile only)
+ifneq ($(PODVM_DISTRO),alinux3)
 ifeq ($(shell echo $(GUEST_COMPONENTS_REF) | grep -E "^[0-9a-f]{40}$$"),)
 	$(error GUEST_COMPONENTS_REF must be a 40-character lowercase git commit SHA)
+endif
 endif
 
 # Verify that KATA_REF is a sha-1 commit digest
@@ -159,10 +161,28 @@ $(PROCESS_USER_DATA): always
 	cd "$(ROOT_DIR)" && ARCH=$(ARCH) $(MAKE) process-user-data
 	install -D --compare "$(ROOT_DIR)/process-user-data" "$@"
 
+ifneq ($(PODVM_DISTRO),alinux3)
 $(KATA_AGENT): $(FORCE_TARGET)
 	$(call pull_agent_artifact)
-	tar --zstd -xvpf kata-static-agent.tar.zst
+	# Prefer -I zstd over --zstd: Alibaba Cloud Linux 3 / older GNU tar lack --zstd.
+	tar -I zstd -xvpf kata-static-agent.tar.zst
 	install -D --compare "./usr/bin/kata-agent" "$@"
+
+$(ATTESTATION_AGENT): $(FORCE_TARGET)
+	$(call pull_gc_artifact,attestation-agent,$(TEE_PLATFORM)_$(ARCH))
+	tar xvJpf attestation-agent.tar.xz
+	install -D --compare attestation-agent "$@"
+
+$(CONFIDENTIAL_DATA_HUB): $(FORCE_TARGET)
+	$(call pull_gc_artifact,confidential-data-hub,$(ARCH))
+	tar xvJpf confidential-data-hub.tar.xz
+	install -D --compare confidential-data-hub "$@"
+
+$(API_SERVER_REST): $(FORCE_TARGET)
+	$(call pull_gc_artifact,api-server-rest,$(ARCH))
+	tar xvJpf api-server-rest.tar.xz
+	install -D --compare api-server-rest "$@"
+endif
 
 # Skopeo package packages are available in RHEL/CentOS 8 or later and Ubuntu 20.10 or later
 $(SKOPEO_SRC):
@@ -189,21 +209,6 @@ $(PAUSE_SRC): $(SKOPEO_BIN)
 $(PAUSE): | $(PAUSE_SRC) $(UMOCI_SRC)/umoci
 	$(UMOCI_SRC)/umoci unpack --rootless --image "$(PAUSE_SRC):$(PAUSE_VERSION)" "${FILES_DIR}/$(PAUSE_BUNDLE)"
 
-$(ATTESTATION_AGENT): $(FORCE_TARGET)
-	$(call pull_gc_artifact,attestation-agent,$(TEE_PLATFORM)_$(ARCH))
-	tar xvJpf attestation-agent.tar.xz
-	install -D --compare attestation-agent "$@"
-
-$(CONFIDENTIAL_DATA_HUB): $(FORCE_TARGET)
-	$(call pull_gc_artifact,confidential-data-hub,$(ARCH))
-	tar xvJpf confidential-data-hub.tar.xz
-	install -D --compare confidential-data-hub "$@"
-
-$(API_SERVER_REST): $(FORCE_TARGET)
-	$(call pull_gc_artifact,api-server-rest,$(ARCH))
-	tar xvJpf api-server-rest.tar.xz
-	install -D --compare api-server-rest "$@"
-
 clean_sources:
 	[ -d "$(ROOT_DIR)" ] && cd "$(ROOT_DIR)" && git clean -xfd -e podvm
 	[ -d "$(PAUSE_SRC)" ] && cd "$(PAUSE_SRC)" && rm -rf *
@@ -211,3 +216,40 @@ clean_sources:
 
 .PHONY: force always
 always force:
+
+# Alibaba Cloud Linux 3 profile (private cloud)
+#
+# Build kata-agent from kata-containers source and install guest-components
+# (AA, CDH, ASR) from alinux3 yum repositories instead of pulling OCI artifacts.
+#
+# Usage: PODVM_DISTRO=alinux3 make binaries-alinux3
+# ---------------------------------------------------------------------------
+KATA_SRC ?= kata-containers
+KATA_REPO_URL ?= https://github.com/kata-containers/kata-containers.git
+GUEST_COMPONENTS_YUM_PKGS ?= attestation-agent confidential-data-hub trustiflux-api-server
+
+.PHONY: binaries-alinux3 install-guest-components-yum
+binaries-alinux3:
+	$(MAKE) PODVM_DISTRO=alinux3 $(BINARIES)
+
+install-guest-components-yum:
+	yum install -y $(GUEST_COMPONENTS_YUM_PKGS)
+
+$(KATA_SRC):
+	$(call git_clone_repo_ref,$(KATA_REPO_URL),$(KATA_SRC),$(KATA_REF))
+
+ifeq ($(PODVM_DISTRO),alinux3)
+$(KATA_AGENT): $(KATA_SRC)
+	cd "$(KATA_SRC)/src/agent" && \
+		AGENT_POLICY=$(AGENT_POLICY) SECCOMP=yes INIT_DATA=yes LIBC=gnu $(MAKE)
+	install -D --compare "$(KATA_SRC)/src/agent/target/$(ARCH)-unknown-linux-gnu/release/kata-agent" "$@"
+
+$(ATTESTATION_AGENT) $(CONFIDENTIAL_DATA_HUB) $(API_SERVER_REST): install-guest-components-yum
+	@aa=$$(command -v attestation-agent); \
+		test -n "$$aa"; install -D --compare "$$aa" "$(ATTESTATION_AGENT)"
+	@cdh=$$(command -v confidential-data-hub); \
+		test -n "$$cdh"; install -D --compare "$$cdh" "$(CONFIDENTIAL_DATA_HUB)"
+	@asr=$$(command -v trustiflux-api-server); \
+		test -n "$$asr"; install -D --compare "$$asr" "$(FILES_DIR)/usr/local/bin/trustiflux-api-server"
+	@ln -sf trustiflux-api-server "$(API_SERVER_REST)"
+endif

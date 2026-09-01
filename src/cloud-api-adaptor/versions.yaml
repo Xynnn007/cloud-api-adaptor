@@ -23,8 +23,10 @@ cloudimg:
   alinux:
     3:
       amd64:
-        url: "https://alinux3.oss-cn-hangzhou.aliyuncs.com/aliyun_3_x64_20G_nocloud_alibase_20250117.qcow2"
-        checksum: "sha256:73c7631c6a48b182e80c7c808d7e3adab3f07ad517fcf5d5eff8f3815306e37e"
+        # Koji build of the Alibaba Cloud Linux 3 image used for private-cloud Pod VMs.
+        # Update the checksum after the image changes.
+        url: "https://koji.alibaba-inc.com/kojifiles/product/alinux-3.2104-U12P-GA/x86_64/aliyun_3_x64_20G_pro_alibase_20250425.qcow2"
+        checksum: ""
 
 tools:
   cert-manager: v1.15.3
