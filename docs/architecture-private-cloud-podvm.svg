@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040"
+     font-family="system-ui,-apple-system,'Segoe UI','PingFang SC','Noto Sans CJK SC',sans-serif">
+  <title>专有云 Peer Pods / Pod VM 架构图</title>
+  <defs>
+    <marker id="as" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1565C0"/></marker>
+    <marker id="ap" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#E65100"/></marker>
+    <marker id="ag" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#546E7A"/></marker>
+  </defs>
+  <rect width="1600" height="1040" fill="#F5F7FA"/>
+  <text x="40" y="32" font-size="20" font-weight="700" fill="#102A43">专有云 Peer Pods 架构（alinux3 Pod VM）</text>
+  <text x="40" y="52" font-size="12" fill="#486581">边界：Worker Node（ACK） · 专有云 IaaS API · Pod VM（ECS） · OS 镜像（alinux3）</text>
+
+  <rect x="1300" y="10" width="260" height="50" rx="6" fill="#fff" stroke="#CFD8DC"/>
+  <line x1="1316" y1="28" x2="1352" y2="28" stroke="#1565C0" stroke-width="2.5" marker-end="url(#as)"/>
+  <text x="1360" y="32" font-size="11" fill="#334E68">启动（CreateVM）</text>
+  <line x1="1316" y1="46" x2="1352" y2="46" stroke="#E65100" stroke-width="2.5" stroke-dasharray="5 3" marker-end="url(#ap)"/>
+  <text x="1360" y="50" font-size="11" fill="#334E68">镜像拉取</text>
+
+  <rect x="40" y="72" width="1080" height="250" rx="10" fill="#E3F2FD" stroke="#1565C0" stroke-width="2"/>
+  <text x="56" y="94" font-size="13" font-weight="700" fill="#0D47A1">产品界面 · ACK（Kubernetes 集群）</text>
+
+  <rect x="56" y="108" width="1048" height="48" rx="6" fill="#fff" stroke="#90CAF9"/>
+  <text x="68" y="138" font-size="12" font-weight="700" fill="#334E68">Control Plane</text>
+<rect x="347.0" y="118" width="150" height="28" rx="4" fill="#BBDEFB" stroke="#1976D2"/>
+  <text x="422.0" y="136.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">mutating webhook</text><rect x="515.0" y="118" width="140" height="28" rx="4" fill="#BBDEFB" stroke="#1976D2"/>
+  <text x="585.0" y="136.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">peerpod-ctrl</text><rect x="673.0" y="118" width="140" height="28" rx="4" fill="#E3F2FD" stroke="#64B5F6"/>
+  <text x="743.0" y="136.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">kube-apiserver</text>
+  <rect x="56" y="172" width="1048" height="132" rx="8" fill="#fff" stroke="#0D47A1" stroke-width="2.5"/>
+  <text x="72" y="194" font-size="12" font-weight="700" fill="#0D47A1">Worker Node</text>
+<rect x="119.0" y="216" width="120" height="64" rx="4" fill="#E3F2FD" stroke="#1976D2"/>
+  <text x="179.0" y="244.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">kubelet</text>
+  <text x="179.0" y="260.0" text-anchor="middle" font-size="10" fill="#546E7A">CRI / Pod</text><rect x="263.0" y="216" width="190" height="64" rx="4" fill="#BBDEFB" stroke="#1565C0"/>
+  <text x="358.0" y="244.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">containerd-shim</text>
+  <text x="358.0" y="260.0" text-anchor="middle" font-size="10" fill="#546E7A">kata-v2 (remote)</text>
+  <rect x="477.0" y="208" width="300" height="80" rx="6" fill="#1565C0"/>
+  <text x="627.0" y="236" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">cloud-api-adaptor</text>
+  <text x="627.0" y="256" text-anchor="middle" font-size="11" fill="#E3F2FD">(CAA DaemonSet)</text>
+  <text x="627.0" y="274" text-anchor="middle" font-size="10" fill="#BBDEFB">CreateVM · Agent gRPC · 隧道</text>
+<rect x="801.0" y="216" width="240" height="64" rx="4" fill="#ECEFF1" stroke="#607D8B"/>
+  <text x="921.0" y="244.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">VxLAN 端点</text>
+  <text x="921.0" y="260.0" text-anchor="middle" font-size="10" fill="#546E7A">Worker ↔ Pod VM 数据面</text>
+  <line x1="239.0" y1="248.0" x2="261.0" y2="248.0" stroke="#546E7A" stroke-width="1.5" marker-end="url(#ag)"/>
+  <line x1="453.0" y1="248.0" x2="475.0" y2="248.0" stroke="#546E7A" stroke-width="1.5" marker-end="url(#ag)"/>
+  <text x="627.0" y="200" text-anchor="middle" font-size="10" font-weight="600" fill="#0D47A1">CreateSandbox → CAA</text>
+
+  <rect x="40" y="378" width="1080" height="70" rx="8" fill="#FFF8E1" stroke="#F9A825" stroke-width="2"/>
+  <text x="56" y="404" font-size="13" font-weight="700" fill="#F57F17">边界 · 专有云 IaaS API 界面（ECS OpenAPI）</text>
+  <text x="56" y="426" font-size="11" fill="#6D4C41">CreateInstance / DeleteInstance / VSwitch / 安全组</text>
+<rect x="780" y="395" width="300" height="36" rx="4" fill="#FFECB3" stroke="#F9A825"/>
+  <text x="930.0" y="417.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">ecs-internal · IMAGEID / VSwitch</text>
+  <path d="M627.0,288 V376" stroke="#1565C0" stroke-width="2.5" fill="none" marker-end="url(#as)"/>
+  <rect x="639.0" y="321.0" width="168" height="18" rx="3" fill="#F5F7FA"/>
+  <text x="643.0" y="335" font-size="10" font-weight="600" fill="#0D47A1">CAA → IaaS CreateInstance</text>
+
+  <path d="M627.0,448 V486" stroke="#1565C0" stroke-width="2.5" fill="none" marker-end="url(#as)"/>
+  <rect x="639.0" y="456" width="120" height="18" rx="3" fill="#F5F7FA"/>
+  <text x="643.0" y="470" font-size="10" font-weight="600" fill="#0D47A1">IaaS → 拉起 Pod VM</text>
+
+  <rect x="40" y="488" width="1080" height="520" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="2"/>
+  <text x="56" y="510" font-size="13" font-weight="700" fill="#1B5E20">产品界面 · ECS（Pod VM 实例 = Peer Pod 沙箱 VM）</text>
+
+  <rect x="56" y="524" width="1048" height="468" rx="8" fill="#fff" stroke="#66BB6A" stroke-width="2"/>
+  <text x="72" y="546" font-size="12" font-weight="700" fill="#2E7D32">产品界面 · 操作系统 / Pod VM OS 镜像（Alibaba Cloud Linux 3）</text>
+
+  <rect x="74.0" y="560" width="240" height="416" rx="6" fill="#F1F8E9" stroke="#81C784"/>
+  <text x="194.0" y="582" text-anchor="middle" font-size="12" font-weight="700" fill="#33691E">启动与宿主服务</text>
+<rect x="90.0" y="600" width="208" height="52" rx="4" fill="#C8E6C9" stroke="#43A047"/>
+  <text x="194.0" y="622.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">process-user-data</text>
+  <text x="194.0" y="638.0" text-anchor="middle" font-size="10" fill="#546E7A">IMDS → peerpod 配置</text><rect x="90.0" y="664" width="208" height="52" rx="4" fill="#C8E6C9" stroke="#43A047"/>
+  <text x="194.0" y="686.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">setup-nat-for-imds</text>
+  <text x="194.0" y="702.0" text-anchor="middle" font-size="10" fill="#546E7A">IMDS ARP/NAT</text><rect x="90.0" y="728" width="208" height="52" rx="4" fill="#C8E6C9" stroke="#43A047"/>
+  <text x="194.0" y="750.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">setup-scratch-storage</text>
+  <text x="194.0" y="766.0" text-anchor="middle" font-size="10" fill="#546E7A">scratch 存储/加密</text><rect x="90.0" y="792" width="208" height="52" rx="4" fill="#C8E6C9" stroke="#43A047"/>
+  <text x="194.0" y="814.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">run-kata-containers.mount</text>
+  <text x="194.0" y="830.0" text-anchor="middle" font-size="10" fill="#546E7A">/kata-containers → /run</text><rect x="90.0" y="856" width="208" height="52" rx="4" fill="#DCEDC8" stroke="#7CB342"/>
+  <text x="194.0" y="878.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">IMDS 169.254.169.254</text>
+  <text x="194.0" y="894.0" text-anchor="middle" font-size="10" fill="#546E7A">user-data / 元数据</text>
+  <rect x="330.0" y="560" width="360" height="416" rx="6" fill="#E3F2FD" stroke="#64B5F6"/>
+  <text x="510.0" y="582" text-anchor="middle" font-size="12" font-weight="700" fill="#0D47A1">Agent 协议与容器运行时</text>
+<rect x="346.0" y="600" width="328" height="56" rx="4" fill="#90CAF9" stroke="#1565C0"/>
+  <text x="510.0" y="624.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">agent-protocol-forwarder</text>
+  <text x="510.0" y="640.0" text-anchor="middle" font-size="10" fill="#546E7A">中继 CAA → kata-agent 连接</text><rect x="346.0" y="684" width="328" height="56" rx="4" fill="#64B5F6" stroke="#0D47A1"/>
+  <text x="510.0" y="708.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">kata-agent</text>
+  <text x="510.0" y="724.0" text-anchor="middle" font-size="10" fill="#546E7A">sandbox / pause / workload 生命周期</text><rect x="346.0" y="752" width="328" height="52" rx="4" fill="#BBDEFB" stroke="#1976D2"/>
+  <text x="510.0" y="774.0" text-anchor="middle" font-size="11" font-weight="600" fill="#102A43">pause_bundle</text>
+  <text x="510.0" y="790.0" text-anchor="middle" font-size="10" fill="#546E7A">pause:3.9</text><rect x="346.0" y="816" width="328" height="100" rx="4" fill="#FFF3E0" stroke="#FB8C00" stroke-dasharray="4 2"/>
+  <text x="510.0" y="856.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">workload container(s)</text>
+  <text x="510.0" y="872.0" text-anchor="middle" font-size="10" fill="#546E7A">业务容器 · Pod netns</text>
+  <text x="510.0" y="886.0" text-anchor="middle" font-size="10" fill="#546E7A">镜像拉取完成后启动</text><line x1="510.0" y1="740" x2="510.0" y2="752" stroke="#546E7A" stroke-width="1.5" marker-end="url(#ag)"/><line x1="510.0" y1="804" x2="510.0" y2="816" stroke="#546E7A" stroke-width="1.5" marker-end="url(#ag)"/>
+  <rect x="706.0" y="560" width="380" height="416" rx="6" fill="#F3E5F5" stroke="#AB47BC"/>
+  <text x="896.0" y="582" text-anchor="middle" font-size="12" font-weight="700" fill="#6A1B9A">机密计算 guest 组件</text>
+<rect x="722.0" y="600" width="348" height="56" rx="4" fill="#E1BEE7" stroke="#8E24AA"/>
+  <text x="896.0" y="624.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">attestation-agent</text>
+  <text x="896.0" y="640.0" text-anchor="middle" font-size="10" fill="#546E7A">TTRPC · csv / hygon-dcu</text><rect x="722.0" y="692" width="348" height="56" rx="4" fill="#CE93D8" stroke="#6A1B9A"/>
+  <text x="896.0" y="716.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">confidential-data-hub</text>
+  <text x="896.0" y="732.0" text-anchor="middle" font-size="10" fill="#546E7A">ttrpc-cdh · 拉证 / 资源注入</text><rect x="722.0" y="760" width="348" height="56" rx="4" fill="#E1BEE7" stroke="#8E24AA"/>
+  <text x="896.0" y="784.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">api-server-rest (ASR)</text>
+  <text x="896.0" y="800.0" text-anchor="middle" font-size="10" fill="#546E7A">pod netns 内 CDH REST</text><rect x="722.0" y="828" width="348" height="88" rx="4" fill="#FCE4EC" stroke="#EC407A"/>
+  <text x="896.0" y="862.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">配置落盘（process-user-data）</text>
+  <text x="896.0" y="878.0" text-anchor="middle" font-size="10" fill="#546E7A">aa.toml / cdh.toml / policy</text>
+  <text x="896.0" y="892.0" text-anchor="middle" font-size="10" fill="#546E7A">initdata · kata-opa</text><line x1="896.0" y1="748" x2="896.0" y2="760" stroke="#546E7A" stroke-width="1.5" marker-end="url(#ag)"/>
+  <rect x="1300" y="72" width="260" height="120" rx="8" fill="#E8EAF6" stroke="#3F51B5" stroke-width="2"/>
+  <text x="1314" y="96" font-size="13" font-weight="700" fill="#283593">产品界面 · 容器镜像仓库</text>
+  <text x="1314" y="116" font-size="10" fill="#5C6BC0">ACR / 专有云私有 Registry</text>
+<rect x="1316" y="128" width="228" height="44" rx="4" fill="#C5CAE9" stroke="#3949AB"/>
+  <text x="1430.0" y="154.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">OCI Image Registry</text>
+  <rect x="1300" y="210" width="260" height="186" rx="8" fill="#FCE4EC" stroke="#C2185B" stroke-width="2"/>
+  <text x="1314" y="236" font-size="13" font-weight="700" fill="#880E4F">远程证明服务 Trustee</text>
+<rect x="1316" y="250" width="228" height="36" rx="4" fill="#F8BBD0" stroke="#AD1457"/>
+  <text x="1430.0" y="272.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">KBS</text><rect x="1316" y="296" width="228" height="36" rx="4" fill="#F8BBD0" stroke="#AD1457"/>
+  <text x="1430.0" y="318.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">AS</text><rect x="1316" y="342" width="228" height="36" rx="4" fill="#F8BBD0" stroke="#AD1457"/>
+  <text x="1430.0" y="364.0" text-anchor="middle" font-size="12" font-weight="600" fill="#102A43">RVPS</text>
+  <rect x="1300" y="420" width="260" height="200" rx="8" fill="#fff" stroke="#90A4AE"/>
+  <text x="1314" y="444" font-size="12" font-weight="700" fill="#37474F">产品界面对照</text>
+  <text x="1314" y="472" font-size="11" font-weight="600" fill="#1565C0">ACK</text>
+  <text x="1354" y="472" font-size="10" fill="#546E7A">控制面 + Worker + CAA</text>
+  <text x="1314" y="496" font-size="11" font-weight="600" fill="#F9A825">IaaS</text>
+  <text x="1354" y="496" font-size="10" fill="#546E7A">ECS OpenAPI</text>
+  <text x="1314" y="520" font-size="11" font-weight="600" fill="#2E7D32">ECS</text>
+  <text x="1354" y="520" font-size="10" fill="#546E7A">Pod VM 实例</text>
+  <text x="1314" y="544" font-size="11" font-weight="600" fill="#66BB6A">OS</text>
+  <text x="1354" y="544" font-size="10" fill="#546E7A">alinux3 镜像组件</text>
+  <text x="1314" y="568" font-size="11" font-weight="600" fill="#3949AB">Registry</text>
+  <text x="1380" y="568" font-size="10" fill="#546E7A">业务镜像</text>
+  <text x="1314" y="592" font-size="11" font-weight="600" fill="#C2185B">证明</text>
+  <text x="1354" y="592" font-size="10" fill="#546E7A">KBS / AS / RVPS</text>
+
+  <!-- CreateContainer: APF -> kata-agent -->
+  <path d="M510.0,656 V684" stroke="#E65100" stroke-width="2" stroke-dasharray="5 3" fill="none" marker-end="url(#ap)"/>
+  <text x="520.0" y="674" font-size="10" font-weight="600" fill="#BF360C">CreateContainer</text>
+
+  <!-- kata-agent -> CDH -->
+  <path d="M674.0,712.0 H722.0" stroke="#E65100" stroke-width="2" stroke-dasharray="5 3" fill="none" marker-end="url(#ap)"/>
+  <text x="698" y="704.0" text-anchor="middle" font-size="10" font-weight="600" fill="#BF360C">拉取镜像</text>
+
+  <!-- CDH -> AA -->
+  <path d="M896.0,692 V656" stroke="#E65100" stroke-width="2" stroke-dasharray="5 3" fill="none" marker-end="url(#ap)"/>
+  <text x="906.0" y="678" font-size="10" font-weight="600" fill="#BF360C">AA 证明</text>
+
+  <!-- AA -> remote attestation -->
+  <path d="M1070.0,628.0 H1180 V250 H1300" stroke="#C2185B" stroke-width="2" stroke-dasharray="4 3" fill="none" marker-end="url(#ap)"/>
+  <text x="1186" y="620.0" font-size="10" font-weight="600" fill="#C2185B">→ 远程证明</text>
+
+  <!-- CDH -> Registry -->
+  <path d="M1070.0,720.0 H1220 V150 H1300" stroke="#E65100" stroke-width="2" stroke-dasharray="5 3" fill="none" marker-end="url(#ap)"/>
+  <text x="1226" y="435" font-size="10" font-weight="600" fill="#BF360C">拉取 OCI</text>
+
+  <!-- start workload -->
+  <path d="M318.0,866.0 H346.0" stroke="#E65100" stroke-width="2" stroke-dasharray="5 3" fill="none" marker-end="url(#ap)"/>
+  <text x="320.0" y="858.0" font-size="10" font-weight="600" fill="#BF360C">启动 workload</text>
+</svg>
