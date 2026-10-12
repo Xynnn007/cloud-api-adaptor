@@ -202,7 +202,7 @@ kubectl describe pod pod-caa-demo
 进入容器：
 
 ```bash
-kubectl exec -it pod-caa-demo -- bash
+kubectl exec -it pod-caa-demo -- sh
 ```
 
 ASR（api-server-rest）在 pod netns 内默认提供 REST（示例端口 `8006`）：
