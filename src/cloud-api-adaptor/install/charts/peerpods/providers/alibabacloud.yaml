@@ -49,7 +49,7 @@ providerConfigs:
 
     # Pod VM image id
     # (required)
-    IMAGEID: "aliyun_3_x86_64_20G_pro_confidential_alibase_20251111.vhd"
+    IMAGEID: "m-7ng00w62u8579klg4nhk"
 
     # Default initdata for all Pods
     # (default: "")
@@ -62,6 +62,12 @@ providerConfigs:
     # SSH Keypair name to be used with the Pod VM
     # (default: "")
     # KEYNAME: ""
+
+    # Login password (for root) to be used with the Pod VM, enabling VNC/SSH
+    # access for guest debugging. Ignored when KEYNAME is set. Stored in plain
+    # text in the peer-pods-cm ConfigMap - only set while debugging.
+    # (default: "")
+    # PASSWORD: ""
 
     # pause image to be used for the pods
     # (default: "")
@@ -85,9 +91,23 @@ providerConfigs:
     SYSTEM_DISK_CATEGORY: "cloud_pperf"
 
     # Timeout (seconds) to wait for the Pod VM to reach Running status before
-    # connecting to the agent forwarder on port 15150
+    # connecting to the agent forwarder on port 15150. Custom CSV images can
+    # take several minutes on first boot; transient ECS API errors during the
+    # wait are retried instead of aborting.
     # (default: 180)
-    INSTANCE_READY_TIMEOUT: "180"
+    INSTANCE_READY_TIMEOUT: "600"
+
+    # Retry window for establishing the agent proxy connection to the pod VM
+    # forwarder (port 15150), in Go duration format. On expiry the VM is
+    # cleaned up immediately (unless KEEP_INSTANCE_ON_FAILURE is set).
+    # (default: "5m")
+    PROXY_TIMEOUT: "5m"
+
+    # Preserve the pod VM instance instead of deleting it when VM startup
+    # fails (e.g. shim/kubelet cancels the start call) - for debugging only.
+    # Kept VMs hold CSV stock and must be deleted manually.
+    # (default: "false")
+    # KEEP_INSTANCE_ON_FAILURE: "false"
 
     # [EXPERIMENTAL] Comma separated CIDRs for local pod subnets
     # (default: "")

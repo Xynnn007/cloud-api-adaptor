@@ -5,21 +5,21 @@ image:
 resourceCtrl:
   image:
     repository: registry.acs.intra.env213.shuguang.com/acs/peerpod-ctrl
-    tag: v0.19.0
+    tag: v0.22.0
   authProxy:
     image: registry.acs.intra.env213.shuguang.com/acs/kube-rbac-proxy:v0.14.0
 
 webhook:
   image:
     repository: registry.acs.intra.env213.shuguang.com/acs/peer-pods-webhook
-    tag: v0.19.0
+    tag: v0.22.0
   authProxy:
     image: registry.acs.intra.env213.shuguang.com/acs/kube-rbac-proxy:v0.14.0
 
 kata-deploy:
   image:
     reference: registry.acs.intra.env213.shuguang.com/acs/coco-kata-deploy
-    tag: 3.28.0
+    tag: 4.0.0
   kubectlImage:
     reference: registry.acs.intra.env213.shuguang.com/acs/kata-containers-kubectl
-    tag: v0.19.0
+    tag: latest

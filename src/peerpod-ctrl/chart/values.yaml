@@ -3,8 +3,8 @@ namePrefix: peerpodctrl-
 
 # PeerPod controller image
 image:
-  repository: quay.io/confidential-containers/peerpod-ctrl
-  tag: 61b1aba91df646a663e60ab6b55c6a7dc93cd167
+  repository: registry.acs.intra.env213.shuguang.com/acs/peerpod-ctrl
+  tag: v0.22.0
   pullPolicy: IfNotPresent
 
 # kube-rbac-proxy: Sidecar container that protects the /metrics endpoint with RBAC authentication
@@ -12,7 +12,7 @@ image:
 # Set to false to expose metrics without authentication (not recommended for production)
 authProxy:
   enabled: true
-  image: registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.14.0
+  image: registry.acs.intra.env213.shuguang.com/acs/kube-rbac-proxy:v0.14.0
 
 # Additional labels merged into the peerpod-ctrl controller-manager pod template.
 # For example, opt into webhook injection via
