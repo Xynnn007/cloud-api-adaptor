@@ -32,6 +32,7 @@ func (*Manager) ParseCmd(flags *flag.FlagSet) {
 	reg.StringWithEnv(&alibabacloudcfg.InstanceType, "instance-type", "ecs.g8i.xlarge", "PODVM_INSTANCE_TYPE", "Pod VM instance type")
 	reg.StringWithEnv(&alibabacloudcfg.VswitchID, "vswitch-id", "", "VSWITCH_ID", "vSwitch ID to be used for the Pod VMs", provider.Required())
 	reg.StringWithEnv(&alibabacloudcfg.KeyName, "keyname", "", "KEYNAME", "SSH Keypair name to be used with the Pod VM")
+	reg.StringWithEnv(&alibabacloudcfg.Password, "password", "", "PASSWORD", "Login password (for root) to be used with the Pod VM - ignored when KEYNAME is set")
 
 	reg.BoolWithEnv(&alibabacloudcfg.UsePublicIP, "use-public-ip", false, "USE_PUBLIC_IP", "Use Public IP for connecting to the kata-agent inside the Pod VM")
 	reg.IntWithEnv(&alibabacloudcfg.SystemDiskSize, "system-disk-size", 40, "SYSTEM_DISK_SIZE", "System Disk size (in GiB) for the Pod VMs")

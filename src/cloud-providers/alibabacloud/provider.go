@@ -293,6 +293,10 @@ func (p *alibabaCloudProvider) CreateInstance(ctx context.Context, podName, sand
 	}
 	if p.serviceConfig.KeyName != "" {
 		req.KeyPairName = tea.String(p.serviceConfig.KeyName)
+	} else if p.serviceConfig.Password != "" {
+		// KeyPairName and Password are mutually exclusive in the ECS API;
+		// the key pair takes precedence when both are configured
+		req.Password = tea.String(p.serviceConfig.Password)
 	}
 
 	// Auto assign public IP address if UsePublicIP is set
@@ -368,15 +372,20 @@ func (p *alibabaCloudProvider) CreateInstance(ctx context.Context, podName, sand
 			return lastStatus == "Running", nil
 		}
 
-		if *err.(*tea.SDKError).StatusCode == 404 {
-			return false, nil
+		if sdkErr, ok := err.(*tea.SDKError); ok {
+			if sdkErr.StatusCode != nil && *sdkErr.StatusCode == 404 {
+				return false, nil
+			}
+			if sdkErr.Message != nil && strings.HasSuffix(*sdkErr.Message, "is not ready") {
+				return false, nil
+			}
 		}
 
-		if strings.HasSuffix(*err.(*tea.SDKError).Message, "is not ready") {
-			return false, nil
-		}
-
-		return false, fmt.Errorf("failed to describe instance %s: %v", instanceID, err)
+		// Transient API failures (e.g. 500 InternalError "Read timed out" from the
+		// private cloud ECS endpoint) must not abort the whole wait; log and keep
+		// polling until the overall ready timeout expires
+		logger.Printf("transient error while describing instance %s, will keep polling: %v", instanceID, err)
+		return false, nil
 	})
 	if err != nil {
 		return instance, fmt.Errorf("failed to wait for instance %s to reach Running (last status: %s) within %v: %v", instanceID, lastStatus, readyTimeout, err)

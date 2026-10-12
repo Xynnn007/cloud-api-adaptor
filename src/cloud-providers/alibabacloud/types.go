@@ -46,6 +46,7 @@ type Config struct {
 	ImageID                   string
 	InstanceType              string
 	KeyName                   string
+	Password                  string
 	VpcID                     string
 	VswitchID                 string
 	SecurityGroupIDs          securityGroupIds
