@@ -45,6 +45,7 @@ type ServerConfig struct {
 	Initdata                string
 	UserDataFormat          string
 	EnableCloudConfigVerify bool
+	KeepInstanceOnFailure   bool
 	PeerPodsLimitPerNode    int
 	RootVolumeSize          int
 	EnableScratchSpace      bool
@@ -366,6 +367,10 @@ func (s *cloudService) StartVM(ctx context.Context, req *pb.StartVMRequest) (res
 	// Cleanup instance if it was created but an error occurred (either during creation or later)
 	defer func() {
 		if err != nil && instance != nil && instance.ID != "" {
+			if s.serverConfig.KeepInstanceOnFailure {
+				logger.Printf("KEEP_INSTANCE_ON_FAILURE is set: preserving instance %s (ID: %s) after error: %v", instance.Name, instance.ID, err)
+				return
+			}
 			logger.Printf("cleaning up instance %s (ID: %s) due to error: %v", instance.Name, instance.ID, err)
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
