@@ -7,20 +7,184 @@
 
 ## 1. 在集群中部署 CAA DaemonSet
 
-> **待补充**：完整 Helm / DaemonSet 安装步骤。
+CAA 部署分三步：**配置 RRSA**（授予 CAA 调用 ECS / VPC API 的权限）→ **部署 cert-manager**（CAA Webhook 证书的前置依赖）→ **Helm Chart 安装 peerpods**（含 CAA DaemonSet、kata-deploy、peerpod-ctrl、webhook）。
 
 前置条件（开发侧完成后）：
 
 - Pod VM 镜像已上传，`IMAGEID` 已写入 `alibabacloud.yaml`（见 [development.md](./development.md) §6）
-- CAA 容器镜像已构建或推送到集群可拉取的仓库
-- 集群已安装 `kata-remote` RuntimeClass（随 peer-pods 安装一并提供）
+- CAA 及依赖镜像（cert-manager 三件套、peerpod-ctrl、webhook、kata-deploy、kube-rbac-proxy 等）已推送到集群可拉取的内网 registry（见 [development.md](./development.md) §5）
+- 集群已安装 `kata-remote` RuntimeClass（随 peer-pods 安装一并提供，无需单独操作）
 
-可先参考仓库安装入口：
+以下命令除特别说明外，均在本仓库 `src/cloud-api-adaptor/install/charts/peerpods/` 目录下执行。
 
-- `src/cloud-api-adaptor/install/README.md`
-- Helm Chart：`src/cloud-api-adaptor/install/charts/peerpods/`
+### 1.1 配置 RRSA 与 RAM 角色
 
-部署完成后，确认各 Worker 上 CAA DaemonSet Pod 为 Running。
+1. 在专有云控制台的集群基本信息页点击 **启用 RRSA**，记录页面上显示的 **提供商 ARN**（后续写入 Secret）。
+
+2. 在 **企业 → 权限管理 → 权限策略** 中创建名为 `ack-caa-policy` 的 RAM 权限策略，授予 ECS 和 VPC 的操作权限：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RunInstances",
+        "ecs:DeleteInstance",
+        "ecs:DescribeInstanceAttribute",
+        "ecs:CreateNetworkInterface",
+        "ecs:DeleteNetworkInterface",
+        "ecs:AttachNetworkInterface",
+        "ecs:ModifyNetworkInterfaceAttribute",
+        "ecs:DescribeNetworkInterfaceAttribute"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "vpc:DescribeVSwitchAttributes",
+        "vpc:AllocateEipAddress",
+        "vpc:ReleaseEipAddress",
+        "vpc:AssociateEipAddress",
+        "vpc:UnassociateEipAddress",
+        "vpc:DescribeEipAddresses"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+3. 在 **企业 → 权限管理 → 角色授权 → 创建角色** 的高级创建里，创建 RAM 角色（示例名 `ack-caa-demo`）并绑定上述策略，信任策略按下表配置：
+
+| 配置项 | 描述 |
+|--------|------|
+| 身份提供者类型 | OIDC |
+| 身份提供者 | 选择 `ack-rrsa-<CLUSTER_ID>`（`<CLUSTER_ID>` 为集群 ID） |
+| 条件 | `oidc:iss`、`oidc:aud` 保持默认；手动添加 `oidc:sub`（StringEquals），限定可扮演该角色的 ServiceAccount：<br>• `system:serviceaccount:confidential-containers-system:cloud-api-adaptor`<br>• `system:serviceaccount:confidential-containers-system:peerpod-ctrl-controller-manager` |
+| 角色名称 | `ack-caa-demo` |
+
+> 注意：授信组织要选自己集群所在的组织，OIDC provider 选自己集群下启用的 RRSA。
+
+4. 创建完成后，在角色详情页记录 **角色 ARN**（后续写入 Secret）。
+
+### 1.2 部署 cert-manager
+
+CAA Webhook 等组件依赖 cert-manager 做证书校验，需先部署。专有云内无法拉取 quay.io 镜像，使用 kustomize 将镜像替换为内网 registry 地址：
+
+```bash
+mkdir -p cert-manager && cd cert-manager
+
+# 下载官方 v1.9.1 清单（构建机可访问外网时下载后传入）
+curl -LO https://github.com/jetstack/cert-manager/releases/download/v1.9.1/cert-manager.yaml
+
+cat << EOF > kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cert-manager.yaml
+
+images:
+  - name: quay.io/jetstack/cert-manager-controller
+    newName: registry.acs.intra.env213.shuguang.com/acs/cert-manager-controller
+  - name: quay.io/jetstack/cert-manager-webhook
+    newName: registry.acs.intra.env213.shuguang.com/acs/cert-manager-webhook
+  - name: quay.io/jetstack/cert-manager-cainjector
+    newName: registry.acs.intra.env213.shuguang.com/acs/cert-manager-cainjector
+EOF
+
+kubectl apply -k .
+kubectl -n cert-manager get pod
+```
+
+三个 Pod 均 Running 后继续。`newName` 请按实际内网 registry 地址调整。
+
+### 1.3 Helm 部署 CAA
+
+1. 创建 Helm 管理的 namespace：
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: confidential-containers-system
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: peerpods
+    meta.helm.sh/release-namespace: confidential-containers-system
+EOF
+```
+
+2. 修改 `providers/alibabacloud.yaml` 中的关键配置（完整说明见 [development.md](./development.md) §6）：
+
+| 参数 | 说明 |
+|------|------|
+| `REGION` | 集群所在区域（专有云示例：`cn-wulan-env213-d01`） |
+| `VSWITCH_ID` | Pod VM 使用的交换机 ID |
+| `SECURITY_GROUP_IDS` | Pod VM 安全组 ID |
+| `IMAGEID` | Pod VM 启动镜像 ID（专有云定制 CSV 镜像） |
+| `PODVM_INSTANCE_TYPE` | CSV 机密实例规格（专有云示例：`ecs.g8h-csv-2numa-hg-k10-c1m1.large`） |
+| `CONFIDENTIAL_COMPUTING_MODE` | 机密计算模式，专有云海光平台填 `CSV` |
+
+3. 确认 `mirror-values.yaml` 中各组件镜像均指向内网 registry（仓库已附带 专有云 配置）。
+
+4. 创建云 API 凭据 Secret，供 CAA DaemonSet 以 RRSA 方式调用 ECS API。将 `${ALIBABA_CLOUD_ROLE_ARN}` 替换为 §1.1 记录的 **角色 ARN**、`${ALIBABA_CLOUD_OIDC_PROVIDER_ARN}` 替换为 **提供商 ARN**：
+
+```bash
+kubectl create secret generic my-provider-creds \
+    -n confidential-containers-system \
+    --from-literal=ALIBABA_CLOUD_ROLE_ARN=${ALIBABA_CLOUD_ROLE_ARN} \
+    --from-literal=ALIBABA_CLOUD_OIDC_PROVIDER_ARN=${ALIBABA_CLOUD_OIDC_PROVIDER_ARN} \
+    --from-literal=ALIBABA_CLOUD_OIDC_TOKEN_FILE=/var/run/secrets/ack.alibabacloud.com/rrsa-tokens/token
+```
+
+5. 安装：
+
+```bash
+helm dependency update
+helm install peerpods . \
+    -f providers/alibabacloud.yaml \
+    -f ./mirror-values.yaml \
+    --set secrets.mode=reference \
+    --set secrets.existingSecretName=my-provider-creds \
+    --set alibabacloud.rrsa.enable=true \
+    -n confidential-containers-system
+```
+
+后续修改 `providers/alibabacloud.yaml`（如更换 `IMAGEID`）后，用相同参数执行 `helm upgrade peerpods .`，再重启 DaemonSet 使 ConfigMap 生效：
+
+```bash
+kubectl -n confidential-containers-system rollout restart ds/cloud-api-adaptor-daemonset
+```
+
+### 1.4 验证部署
+
+等待约 3 分钟后检查部署状态：
+
+```bash
+kubectl -n confidential-containers-system get pod
+```
+
+预期输出包含 `kata-deploy-*`、`cloud-api-adaptor-daemonset-*`、`peerpodctrl-controller-manager-*` 三类组件，状态均为 Running：
+
+```
+NAME                                             READY   STATUS    RESTARTS   AGE
+cloud-api-adaptor-daemonset-pnmpz                1/1     Running   0          20m
+kata-deploy-89x8h                                1/1     Running   0          20m
+peerpodctrl-controller-manager-bfdb466fb-xl8xc   2/2     Running   0          20m
+```
+
+其中 `cloud-api-adaptor-daemonset-*` 在每个 Worker 节点各一个；同时确认 RuntimeClass 已就绪：
+
+```bash
+kubectl get runtimeclass kata-remote
+```
+
+> **重要**：后续如需删除集群，请先删除所有使用 `runtimeClassName: kata-remote` 的工作负载，再删集群，避免 CAA 创建的机密虚拟机资源残留。
 
 ---
 
