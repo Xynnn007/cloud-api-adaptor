@@ -219,8 +219,9 @@ always force:
 
 # Alibaba Cloud Linux 3 profile (private cloud)
 #
-# Build kata-agent from kata-containers source and install guest-components
-# (AA, CDH, ASR) from alinux3 yum repositories instead of pulling OCI artifacts.
+# Build kata-agent from kata-containers source as a musl-static binary (avoids
+# rustup gnu-std pulling GLIBC_2.34 onto alinux3's glibc 2.32), and install
+# guest-components (AA, CDH, ASR) from alinux3 yum repositories.
 #
 # Usage: PODVM_DISTRO=alinux3 make binaries-alinux3
 # ---------------------------------------------------------------------------
@@ -240,9 +241,8 @@ $(KATA_SRC):
 
 ifeq ($(PODVM_DISTRO),alinux3)
 $(KATA_AGENT): $(KATA_SRC)
-	cd "$(KATA_SRC)/src/agent" && \
-		AGENT_POLICY=$(AGENT_POLICY) SECCOMP=yes INIT_DATA=yes LIBC=gnu $(MAKE)
-	install -D --compare "$(KATA_SRC)/src/agent/target/$(ARCH)-unknown-linux-gnu/release/kata-agent" "$@"
+	ARCH=$(ARCH) AGENT_POLICY=$(AGENT_POLICY) SECCOMP=yes INIT_DATA=yes \
+		./hack/build-kata-agent-musl.sh "$(KATA_SRC)" "$@"
 
 $(ATTESTATION_AGENT) $(CONFIDENTIAL_DATA_HUB) $(API_SERVER_REST): install-guest-components-yum
 	@aa=$$(command -v attestation-agent); \

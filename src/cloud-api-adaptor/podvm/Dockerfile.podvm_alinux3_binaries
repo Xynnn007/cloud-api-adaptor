@@ -4,7 +4,8 @@
 #
 # Build Pod VM binaries overlay for an Alibaba Cloud Linux 3 based image.
 #
-# - kata-agent: built from kata-containers source at KATA_REF
+# - kata-agent: musl-static build from kata-containers source at KATA_REF
+#   (avoids rustup gnu-std requiring GLIBC newer than alinux3's 2.32)
 # - guest-components (AA/CDH/ASR): installed from alinux3 yum packages
 # - CAA binaries + pause bundle: built/assembled locally (same as upstream)
 #
@@ -40,7 +41,7 @@ ARG GOPROXY=https://goproxy.cn,direct
 ENV GOPROXY=${GOPROXY}
 
 RUN yum install -y \
-        make gcc gcc-c++ git perl pkgconfig \
+        make gcc gcc-c++ git perl pkgconfig binutils file \
         libseccomp-devel gpgme-devel device-mapper-devel libassuan-devel \
         openssl-devel tpm2-tss-devel clang xz zstd jq curl ca-certificates \
         unzip tar gzip which protobuf-compiler cmake \
@@ -50,10 +51,23 @@ ADD https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz /tmp/go.tar
 RUN rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tar.gz && rm -f /tmp/go.tar.gz
 ENV PATH="/usr/local/go/bin:$PATH"
 
-# Rust toolchain for kata-agent source build
+# Rust toolchain + musl target for static kata-agent
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
 ENV PATH="/root/.cargo/bin:$PATH"
-RUN rustup target add ${ARCH}-unknown-linux-gnu
+RUN rustup target add ${ARCH}-unknown-linux-musl
+
+# musl cross toolchain (linker for x86_64-unknown-linux-musl).
+# Required so kata-agent does not pick up host glibc symbol versions.
+# Download uses the build-arg proxy (do NOT put musl.cc in NO_PROXY).
+ARG MUSL_CROSS_URL="https://musl.cc/x86_64-linux-musl-cross.tgz"
+RUN curl -fL --retry 3 --retry-delay 2 "${MUSL_CROSS_URL}" -o /tmp/musl-cross.tgz \
+    && tar -C /opt -xzf /tmp/musl-cross.tgz \
+    && rm -f /tmp/musl-cross.tgz
+ENV PATH="/opt/${ARCH}-linux-musl-cross/bin:${PATH}"
+RUN mkdir -p /root/.cargo \
+    && printf '[target.%s-unknown-linux-musl]\nlinker = "%s-linux-musl-gcc"\n' "${ARCH}" "${ARCH}" \
+       > /root/.cargo/config.toml \
+    && ${ARCH}-linux-musl-gcc --version
 
 ADD https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH} /usr/local/bin/yq
 RUN echo "${YQ_CHECKSUM#sha256:} /usr/local/bin/yq" | sha256sum -c
@@ -96,7 +110,12 @@ COPY . /src
 WORKDIR /src/cloud-api-adaptor/podvm
 RUN ./hack/cross-build-extras.sh || true
 
-RUN LIBC=gnu make binaries-alinux3
+# LIBC=musl is enforced for kata-agent inside binaries-alinux3 / build-kata-agent-musl.sh
+# Cache cargo crates only. Do NOT mount over kata-containers/ — Docker would create
+# that directory for the mount and Make would skip the git clone prerequisite.
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    make binaries-alinux3
 
 FROM scratch
 COPY --from=podvm_binaries_builder /src/cloud-api-adaptor/podvm/files /
