@@ -1,0 +1,17 @@
+# Trustiflux / inclavare api-server-rest (ASR) config for Pod VM.
+# Binary default path: /etc/trustiflux/trustiflux-api-server.toml
+# Upstream CoCo used `api-server-rest --features all`; this fork's musl ASR
+# takes a TOML config instead.
+
+# Listen in the pod network namespace (unit sets NetworkNamespacePath=/run/netns/podns)
+bind = "127.0.0.1:8006"
+
+# Forward Confidential Data Hub APIs
+enable_cdh = true
+cdh_socket = "unix:///run/confidential-containers/cdh.sock"
+allow_remote_resource_injection = false
+
+# Forward Attestation Agent APIs
+enable_aa = true
+aa_socket = "unix:///run/confidential-containers/attestation-agent/attestation-agent.sock"
+allow_remote_get_evidence = false

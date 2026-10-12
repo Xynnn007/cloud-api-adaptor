@@ -1,12 +1,12 @@
 [Unit]
-Description=CDH API Server Rest Service
+Description=CDH/AA API Server Rest Service (Trustiflux ASR)
 BindsTo=netns@podns.service
-After=network.target kata-agent.service netns@podns.service
+After=network.target kata-agent.service netns@podns.service attestation-agent.service confidential-data-hub.service
 
 [Service]
 Type=simple
 NetworkNamespacePath=/run/netns/podns
-ExecStart=/usr/local/bin/api-server-rest --features all
+ExecStart=/usr/local/bin/api-server-rest --config /etc/trustiflux/trustiflux-api-server.toml
 RestartSec=1
 Restart=always
 
