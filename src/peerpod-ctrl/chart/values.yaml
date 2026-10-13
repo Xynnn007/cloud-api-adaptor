@@ -2,6 +2,10 @@
 namePrefix: peerpodctrl-
 
 # PeerPod controller image
+# NOTE: points to the private-cloud internal registry backup (upstream source ref:
+# quay.io/confidential-containers/peerpod-ctrl:v0.22.0). When deploying to
+# another environment, sync the image to the target registry first and update
+# repository/tag below; full image inventory: docs/deployment.md §1.5.
 image:
   repository: registry.acs.intra.env213.shuguang.com/acs/peerpod-ctrl
   tag: v0.22.0
@@ -12,6 +16,8 @@ image:
 # Set to false to expose metrics without authentication (not recommended for production)
 authProxy:
   enabled: true
+  # private-cloud internal registry backup (upstream source ref:
+  # registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.14.0)
   image: registry.acs.intra.env213.shuguang.com/acs/kube-rbac-proxy:v0.14.0
 
 # Additional labels merged into the peerpod-ctrl controller-manager pod template.

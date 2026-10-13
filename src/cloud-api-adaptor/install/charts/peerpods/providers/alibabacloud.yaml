@@ -49,7 +49,7 @@ providerConfigs:
 
     # Pod VM image id
     # (required)
-    IMAGEID: "m-7ng00w62u8579klg4nhk"
+    IMAGEID: "m-7ng00w62s46354u8s5eq"
 
     # Default initdata for all Pods
     # (default: "")

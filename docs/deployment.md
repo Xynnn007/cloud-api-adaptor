@@ -12,8 +12,8 @@ CAA 部署分三步：**配置 RRSA**（授予 CAA 调用 ECS / VPC API 的权�
 前置条件（开发侧完成后）：
 
 - Pod VM 镜像已上传，`IMAGEID` 已写入 `alibabacloud.yaml`（见 [development.md](./development.md) §6）
-- CAA 及依赖镜像（cert-manager 三件套、peerpod-ctrl、webhook、kata-deploy、kube-rbac-proxy 等）已推送到集群可拉取的内网 registry（见 [development.md](./development.md) §5）
-- 集群已安装 `kata-remote` RuntimeClass（随 peer-pods 安装一并提供，无需单独操作）
+- CAA 及依赖镜像（cert-manager 三件套、cloud-api-adaptor、peerpod-ctrl、webhook、kata-deploy、kube-rbac-proxy 等）**均已构建/备份在专有云内网 registry** `registry.acs.intra.env213.shuguang.com/acs`（构建见 [development.md](./development.md) §5）。部署到其他专有云环境时，请先将这些镜像 mirror 到目标 registry，完整清单与同步方法见 §1.5
+- `kata-remote` RuntimeClass 无需单独安装：与公有云一致，随 Helm Chart（kata-deploy 子 chart）一并安装，验证与排查见 §1.4
 
 以下命令除特别说明外，均在本仓库 `src/cloud-api-adaptor/install/charts/peerpods/` 目录下执行。
 
@@ -87,10 +87,13 @@ resources:
   - cert-manager.yaml
 
 images:
+  # 源镜像：quay.io/jetstack/cert-manager-controller:v1.9.1（专有云 已缓存）
   - name: quay.io/jetstack/cert-manager-controller
     newName: registry.acs.intra.env213.shuguang.com/acs/cert-manager-controller
+  # 源镜像：quay.io/jetstack/cert-manager-webhook:v1.9.1（专有云 已缓存）
   - name: quay.io/jetstack/cert-manager-webhook
     newName: registry.acs.intra.env213.shuguang.com/acs/cert-manager-webhook
+  # 源镜像：quay.io/jetstack/cert-manager-cainjector:v1.9.1（专有云 已缓存）
   - name: quay.io/jetstack/cert-manager-cainjector
     newName: registry.acs.intra.env213.shuguang.com/acs/cert-manager-cainjector
 EOF
@@ -99,7 +102,9 @@ kubectl apply -k .
 kubectl -n cert-manager get pod
 ```
 
-三个 Pod 均 Running 后继续。`newName` 请按实际内网 registry 地址调整。
+三个 Pod 均 Running 后继续。
+
+> **镜像来源说明**：上述三个 cert-manager 镜像已缓存在专有云内网 registry（`registry.acs.intra.env213.shuguang.com/acs/cert-manager-*`，源 ref `quay.io/jetstack/cert-manager-{controller,webhook,cainjector}:v1.9.1`）。其他环境部署时需先将源镜像同步到自己的 registry，再把 `newName` 改为对应地址（同步方法见 §1.5）。
 
 ### 1.3 Helm 部署 CAA
 
@@ -126,7 +131,7 @@ EOF
 | `REGION` | 集群所在区域（专有云示例：`cn-wulan-env213-d01`） |
 | `VSWITCH_ID` | Pod VM 使用的交换机 ID |
 | `SECURITY_GROUP_IDS` | Pod VM 安全组 ID |
-| `IMAGEID` | Pod VM 启动镜像 ID（专有云定制 CSV 镜像） |
+| `IMAGEID` | Pod VM 启动镜像 ID（专有云定制 CSV 镜像，当前样例：`m-7ng00w62s46354u8s5eq`） |
 | `PODVM_INSTANCE_TYPE` | CSV 机密实例规格（专有云示例：`ecs.g8h-csv-2numa-hg-k10-c1m1.large`） |
 | `CONFIDENTIAL_COMPUTING_MODE` | 机密计算模式，专有云海光平台填 `CSV` |
 
@@ -178,13 +183,49 @@ kata-deploy-89x8h                                1/1     Running   0          20
 peerpodctrl-controller-manager-bfdb466fb-xl8xc   2/2     Running   0          20m
 ```
 
-其中 `cloud-api-adaptor-daemonset-*` 在每个 Worker 节点各一个；同时确认 RuntimeClass 已就绪：
+其中 `cloud-api-adaptor-daemonset-*` 在每个 Worker 节点各一个。
+
+**kata-remote RuntimeClass**（与公有云一致，由 Helm 一并安装，无需手工创建）：peerpods chart 的 kata-deploy 子 chart 通过其 `runtimeclasses.yaml` 模板渲染创建 `RuntimeClass/kata-remote`（handler 为 `kata-remote`）；kata-deploy DaemonSet 同时在每个节点安装 kata-remote shim 二进制并写入 containerd 配置。验证：
 
 ```bash
 kubectl get runtimeclass kata-remote
 ```
 
+若缺失：先确认 kata-deploy Pod 是否 Running 并查看日志（`kubectl -n confidential-containers-system logs <kata-deploy-pod>`）；恢复后重新执行 `helm upgrade` 即可重建。
+
 > **重要**：后续如需删除集群，请先删除所有使用 `runtimeClassName: kata-remote` 的工作负载，再删集群，避免 CAA 创建的机密虚拟机资源残留。
+
+### 1.5 镜像清单与跨环境迁移
+
+上表所有容器镜像均已构建/备份在 **专有云内网 registry**（`registry.acs.intra.env213.shuguang.com/acs`，下表简写 `.../acs`），可供专有云整体 mirror 使用。部署到其他环境时，先按下表把镜像同步到目标 registry，再修改对应配置位置：
+
+| 组件 | 上游源 ref | 专有云内网地址 | 配置位置 |
+|------|-----------|--------------|----------|
+| cert-manager 三件套 | `quay.io/jetstack/cert-manager-{controller,webhook,cainjector}:v1.9.1` | `.../acs/cert-manager-{controller,webhook,cainjector}` | §1.2 kustomization `newName` |
+| cloud-api-adaptor | 本仓库自建，含 专有云定制（构建见 [development.md](./development.md) §5；上游 `quay.io/confidential-containers/cloud-api-adaptor`） | `.../acs/coco-cloud-api-adaptor:2274f17ad298088eeefa20fe4b3a58a350ceab4e` | `mirror-values.yaml` → `image` |
+| peerpod-ctrl | `quay.io/confidential-containers/peerpod-ctrl:v0.22.0` | `.../acs/peerpod-ctrl:v0.22.0` | `mirror-values.yaml` → `resourceCtrl`；单独部署时为 `src/peerpod-ctrl/chart/values.yaml` |
+| peer-pods-webhook | `quay.io/confidential-containers/peer-pods-webhook:v0.22.0` | `.../acs/peer-pods-webhook:v0.22.0` | `mirror-values.yaml` → `webhook` |
+| kube-rbac-proxy | `registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.14.0` | `.../acs/kube-rbac-proxy:v0.14.0` | `mirror-values.yaml` → `authProxy` |
+| kata-deploy | `quay.io/kata-containers/kata-deploy:4.0.0`（chart 默认；专有云 备份为 CoCo 变体，转自 confidential-ai-registry） | `.../acs/coco-kata-deploy:4.0.0` | `mirror-values.yaml` → `kata-deploy.image` |
+| kata-containers-kubectl | `registry-cn-hangzhou.ack.aliyuncs.com/dev/kata-containers-kubectl:latest` | `.../acs/kata-containers-kubectl:latest` | `mirror-values.yaml` → `kata-deploy.kubectlImage` |
+
+> Pod VM 镜像是 ECS 系统盘镜像（非容器镜像），每个环境需单独烘焙上传，构建与 `IMAGEID` 获取见 [development.md](./development.md) §4/§6。
+
+镜像同步示例（在能同时访问源与目标 registry 的机器上执行，推送需携带凭据）：
+
+```bash
+skopeo copy --all --dest-tls-verify=false \
+  --dest-creds '<user>:<password>' \
+  docker://quay.io/confidential-containers/peerpod-ctrl:v0.22.0 \
+  docker://<目标registry>/<命名空间>/peerpod-ctrl:v0.22.0
+```
+
+换环境时需要修改的内容汇总：
+
+- `mirror-values.yaml`：全部组件镜像地址与 tag
+- `providers/alibabacloud.yaml`：`REGION` / `VSWITCH_ID` / `SECURITY_GROUP_IDS` / `IMAGEID`
+- §1.2 cert-manager kustomization 的 `newName`
+- `src/peerpod-ctrl/chart/values.yaml`：仅单独部署 peerpod-ctrl 时
 
 ---
 
