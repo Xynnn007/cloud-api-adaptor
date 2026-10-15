@@ -32,7 +32,7 @@ VERIFY_PROVENANCE ?= no
 MKOSI_VERSION ?= v26
 
 # Alibaba Cloud Linux 3 Pod VM image settings
-ALINUX3_BUILDER_IMAGE ?= alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/alinux3:latest
+ALINUX3_BUILDER_IMAGE ?= $(call query,oci.alinux3.registry):$(call query,oci.alinux3.tag)
 PODVM_ALINUX3_CUSTOMIZER_IMAGE ?= $(REGISTRY)/podvm-alinux3-customizer-$(DISTRO_ARCH):$(PODVM_TAG)
 PODVM_ALINUX3_IMAGE ?= $(REGISTRY)/podvm-alinux3-$(DISTRO_ARCH):$(PODVM_TAG)
 
@@ -197,6 +197,10 @@ image-alinux3: podvm-binaries-alinux3
 		-e "GUEST_PKGS=iptables,iproute,tpm2-tools,e2fsprogs,cryptsetup,ca-certificates" \
 		$(PODVM_ALINUX3_CUSTOMIZER_IMAGE) \
 		/input/base.qcow2 /output
+
+.PHONY: podvm-alinux3-tree
+podvm-alinux3-tree:
+	./hack/ci-build-podvm-alinux3-tree.sh
 
 # Re-run only the qcow2 customization step (skips binaries rebuild).
 .PHONY: image-alinux3-customize

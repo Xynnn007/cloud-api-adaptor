@@ -1,0 +1,92 @@
+# Copyright Confidential Containers Contributors
+# SPDX-License-Identifier: Apache-2.0
+---
+name: Build alinux3 Pod VM overlay
+
+on:
+  push:
+    tags:
+      - '**'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and publish overlay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: src/cloud-api-adaptor/go.mod
+          cache-dependency-path: src/cloud-api-adaptor/go.sum
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            autoconf automake build-essential gperf libtool musl-tools pkg-config
+
+      - name: Select artifact name
+        id: artifact
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == "push" ]]; then
+            version="${REF_NAME//\//-}"
+          else
+            version="${SHA:0:8}"
+          fi
+          name="podvm-alinux3-tree-${version}.tar.gz"
+          echo "name=${name}" >> "${GITHUB_OUTPUT}"
+          echo "path=${RUNNER_TEMP}/${name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build overlay tarball
+        env:
+          GOPROXY: https://proxy.golang.org,direct
+          OUT_TGZ: ${{ steps.artifact.outputs.path }}
+        run: ./src/cloud-api-adaptor/podvm/hack/ci-build-podvm-alinux3-tree.sh
+
+      - name: Upload test artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.artifact.outputs.path }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish tag artifact to GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ steps.artifact.outputs.path }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${ARTIFACT}" --clobber
+          else
+            gh release create "${TAG}" "${ARTIFACT}" \
+              --title "${TAG}" \
+              --generate-notes \
+              --verify-tag
+          fi

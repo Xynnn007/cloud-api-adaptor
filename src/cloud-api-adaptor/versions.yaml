@@ -33,6 +33,7 @@ tools:
   bats: 1.10.0
   iptables-wrapper: bfef9e5087a198b50a4124bb9ce9d2c7c99025dd
   golang: 1.25.12
+  rust: 1.90.0
   kcli: 99.0.202507200957
   mkosi: v26
   protoc: 3.16.0
@@ -51,10 +52,24 @@ git:
   kbs:
     url: https://github.com/confidential-containers/trustee
     reference: 258ea4acb7b9bd865fce5c63a539f2120dba8298
+  kata-containers:
+    url: https://github.com/kata-containers/kata-containers.git
+    reference: cf82bb35c80320178bf7570252fe75d6fb263209
+  inclavare-guest-components:
+    url: https://github.com/inclavare-containers/guest-components.git
+    reference: b4986c10d13dc917bc4c97f60c44414bfc4ab5d2
+    aa_attester: csv-attester,hygon-dcu-attester,tdx-attester,tpm-attester
+    runtime_rpms: "tpm2-tss libtdx-attest tee-primitives"
 # If a tag is given it will attempt to pull the oci image by tag. if a
 # reference is specified the corresponding tag will be constructed using
 # the reference and suffixes like architecture or tee.
 oci:
+  alinux3:
+    registry: alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/alinux3
+    tag: latest
+  alpine:
+    registry: docker.io/library/alpine
+    tag: "3.20"
   pause:
     registry: registry.k8s.io/pause
     tag: "3.9"

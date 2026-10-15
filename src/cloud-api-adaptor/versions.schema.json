@@ -32,6 +32,7 @@
         "bats",
         "iptables-wrapper",
         "golang",
+        "rust",
         "kcli",
         "mkosi",
         "protoc",
@@ -49,6 +50,9 @@
           "$ref": "#/$defs/tool"
         },
         "golang": {
+          "$ref": "#/$defs/tool"
+        },
+        "rust": {
           "$ref": "#/$defs/tool"
         },
         "kcli": {
@@ -84,6 +88,12 @@
             "format": "uri"
           },
           "reference": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "aa_attester": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "runtime_rpms": {
             "$ref": "#/$defs/nonEmptyString"
           }
         }
@@ -170,8 +180,8 @@
         },
         "checksum": {
           "type": "string",
-          "description": "Algorithm-prefixed digest, e.g. sha256:<64 hex> or sha512:<128 hex>.",
-          "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+          "description": "Optional algorithm-prefixed digest, e.g. sha256:<64 hex> or sha512:<128 hex>.",
+          "pattern": "^$|^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
         }
       }
     }

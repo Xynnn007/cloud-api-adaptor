@@ -89,7 +89,18 @@ export GOPROXY=https://goproxy.cn,direct
 
 ## 3. 本机构建 Pod VM 组件（可选）
 
-若不用容器内 `podvm-binaries-alinux3`，可本机汇总到可拷贝目录树：
+一条命令可生成与 Pod VM 根目录相同布局的叠加层，并打包为
+`_output/podvm-alinux3-tree.tar.gz`：
+
+```bash
+cd src/cloud-api-adaptor/podvm
+make podvm-alinux3-tree
+```
+
+kata-agent、guest-components、alinux3 构建镜像及运行时 RPM 的版本统一定义在
+`src/cloud-api-adaptor/versions.yaml`。
+
+也可以分步构建：
 
 ```bash
 # 1) peerpods Go 组件
@@ -101,12 +112,19 @@ cd src/cloud-api-adaptor && CGO_ENABLED=0 make agent-protocol-forwarder process-
 # 3) AA / CDH / ASR（inclavare musl 静态）
 #    推荐：Ubuntu + musl-tools
 #    产物示例：work/build-artifacts/{attestation-agent,confidential-data-hub,api-server-rest}
-./work/build-artifacts/build-aa-cdh-asr-musl.sh
+./podvm/hack/build-aa-cdh-asr-musl.sh
 
 # 4) 汇总到可拷贝目录树
-./work/build-artifacts/assemble-podvm-tree.sh
+./podvm/hack/assemble-podvm-alinux3-tree.sh
 # 产物：work/podvm-alinux3-tree/
 ```
+
+### GitHub Actions 产物
+
+`.github/workflows/podvm_alinux3_tree.yaml` 支持两种触发方式：
+
+- 推送 tag：构建 tar 包，并创建或复用同名 GitHub Release 上传产物。
+- 手动运行：不创建 Release，只保存 14 天的 Actions artifact，供测试下载。
 
 ### 拷贝到运行中的 alinux3 实例后 enable
 
@@ -126,9 +144,7 @@ systemctl enable kata-agent.path
 systemctl enable api-server-rest.path
 
 # pause image 权限
-chmod 755 /pause_bundle
-chmod 755 /pause_bundle/rootfs
-chmod 755 /pause_bundle/rootfs/pause
+chmod -R 0777 /pause_bundle
 
 # guest 收尾（SELinux/GRUB/peerpod 等）；--skip-yum 跳过装包
 # 源文件：src/cloud-api-adaptor/podvm/hack/guest-setup.sh
