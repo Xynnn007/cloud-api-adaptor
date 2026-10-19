@@ -39,7 +39,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
-            autoconf automake build-essential gperf libtool musl-tools pkg-config
+            autoconf automake build-essential ca-certificates curl file git \
+            gperf libtool linux-libc-dev musl-tools pkg-config protobuf-compiler
 
       - name: Select artifact name
         id: artifact
@@ -87,6 +88,5 @@ jobs:
           else
             gh release create "${TAG}" "${ARTIFACT}" \
               --title "${TAG}" \
-              --generate-notes \
-              --verify-tag
+              --generate-notes
           fi

@@ -25,6 +25,29 @@ SKIP_TDX_TPM_RUNTIME="${SKIP_TDX_TPM_RUNTIME:-0}"
 
 log() { printf '[ci-podvm-tree] %s\n' "$*"; }
 
+export GIT_TERMINAL_PROMPT=0
+
+docker_pull() {
+  local image="$1" attempt
+  for attempt in 1 2 3; do
+    if docker pull "${image}"; then
+      return 0
+    fi
+    log "docker pull attempt ${attempt}/3 failed: ${image}"
+    sleep $((attempt * 5))
+  done
+  log "ERROR: docker pull failed: ${image}"
+  return 1
+}
+
+require_docker() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  log "ERROR: docker is required for the Alpine guest-components build, alinux3 runtime extract, and pause bundle"
+  exit 1
+}
+
 host_go_arch() {
   case "$(uname -m)" in
     x86_64|amd64) echo amd64 ;;
@@ -102,17 +125,18 @@ ensure_yq() {
   dest="${TOOLS_DIR}/yq"
   local urls=(
     "https://github.com/mikefarah/yq/releases/download/${ver}/yq_linux_${arch}"
-    "https://mirror.ghproxy.com/https://github.com/mikefarah/yq/releases/download/${ver}/yq_linux_${arch}"
-    "https://ghfast.top/https://github.com/mikefarah/yq/releases/download/${ver}/yq_linux_${arch}"
   )
   for url in "${urls[@]}"; do
     log "Installing yq ${ver} from ${url}"
     if curl -fsSL --retry 3 --retry-delay 2 -o "${dest}.tmp" "${url}"; then
-      mv -f "${dest}.tmp" "${dest}"
-      chmod +x "${dest}"
-      export PATH="${TOOLS_DIR}:${PATH}"
-      yq --version
-      return 0
+      chmod +x "${dest}.tmp"
+      if "${dest}.tmp" --version >/dev/null 2>&1; then
+        mv -f "${dest}.tmp" "${dest}"
+        export PATH="${TOOLS_DIR}:${PATH}"
+        yq --version
+        return 0
+      fi
+      log "downloaded file is not a working yq binary, try next"
     fi
     rm -f "${dest}.tmp"
   done
@@ -155,7 +179,7 @@ if [[ "${SKIP_KATA_BUILD}" != "1" ]]; then
   if [[ ! -d "${KATA_SRC}/.git" ]]; then
     log "Cloning kata-containers ${KATA_REF} from ${KATA_REPO_URL}"
     mkdir -p "$(dirname "${KATA_SRC}")"
-    git clone --filter=blob:none "${KATA_REPO_URL}" "${KATA_SRC}"
+    git clone --filter=blob:none --no-checkout "${KATA_REPO_URL}" "${KATA_SRC}"
   fi
   # Prefer fetching the pinned commit; fall back to full fetch if shallow fails
   git -C "${KATA_SRC}" fetch --depth=1 origin "${KATA_REF}" || \
@@ -169,6 +193,16 @@ else
 fi
 
 # --- AA / CDH / ASR musl (inclavare) ---
+need_docker=0
+[[ "${SKIP_AA_BUILD}" != "1" ]] && need_docker=1
+[[ "${SKIP_TDX_TPM_RUNTIME}" != "1" ]] && need_docker=1
+if [[ "${SKIP_PAUSE}" != "1" ]] && { ! command -v skopeo >/dev/null 2>&1 || ! command -v umoci >/dev/null 2>&1; }; then
+  need_docker=1
+fi
+if [[ "${need_docker}" == "1" ]]; then
+  require_docker
+fi
+
 if [[ "${SKIP_AA_BUILD}" != "1" ]]; then
   log "Building AA/CDH/ASR with ATTESTER=${AA_ATTESTER}"
   # Pass through pins from versions.yaml; build script also reloads defaults
@@ -203,6 +237,7 @@ if [[ "${SKIP_PAUSE}" != "1" ]]; then
   else
     # Docker-based fallback: extract pause binary into a minimal OCI-like bundle
     log "skopeo/umoci missing; using docker to materialize pause_bundle"
+    docker_pull "${PAUSE_REPO}:${PAUSE_VERSION}"
     cid="$(docker create "${PAUSE_REPO}:${PAUSE_VERSION}")"
     mkdir -p "${PAUSE_DIR}/rootfs"
     docker export "${cid}" | tar -C "${PAUSE_DIR}/rootfs" -xf -
